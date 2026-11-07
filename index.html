@@ -597,6 +597,15 @@
         </div>
         <div class="hint" id="broadcastHint" style="margin:-4px 0 4px;">英文：听发音写单词 ｜ 中文：听释义写单词（需单词带中文）</div>
 
+        <div class="setting-row" id="polyRow">
+          <span class="label">多音字校正</span>
+          <div class="seg" id="polySeg">
+            <button type="button" data-v="1" class="active">开启</button>
+            <button type="button" data-v="0">关闭</button>
+          </div>
+        </div>
+        <div class="hint" id="polyHint" style="margin:-4px 0 4px;">开启后自动纠正「银行→银航」这类读音；个别词可用「长（zhǎng）」在词条里手动指定</div>
+
         <div class="setting-row">
           <span class="label">播报顺序</span>
           <div class="seg" id="orderSeg">
@@ -716,6 +725,7 @@
     playOrder: [],      // 实际播放顺序（索引数组）
     idx: 0,             // 当前播到 playOrder 的第几个
     broadcast: 'en',    // en=报英文写英文 | zh=报中文写英文
+    polyFix: true,      // 语文模式：朗读时自动纠正多音字
     order: 'seq',       // seq | random
     repeat: 1,
     repeatGap: 2,       // 遍与遍之间的间隔（秒）
@@ -795,8 +805,8 @@
       title: '语文词语默写',
       sub: '输入词语，听音默写，离线也能用',
       cardTitle: '📝 本次默写的词语',
-      inputHint: '一行一个词语（支持成语）；可用「=」带提示语，帮助区分同音字。',
-      placeholder: '每行一个词语，例如：\n葡萄\n观察\n拼命\n\n也可以带提示语（= 后面写例句）：\n拼命 = 他拼命地向前跑\n\n提示语会在词语后播出，帮孩子确定是哪个字',
+      inputHint: '一行一个词语（支持成语）；可用「=」带提示语，多音字可写「长（zhǎng）」指定读音。',
+      placeholder: '每行一个词语，例如：\n葡萄\n观察\n拼命\n\n多音字可加注拼音：\n长（zhǎng）\n出差（chu1 chai1）\n\n也可以带提示语（= 后面写例句）：\n拼命 = 他拼命地向前跑\n\n提示语会在词语后播出，帮孩子确定是哪个字',
       listNamePh: '列表名，如：二年级上册第3课',
       peekLabel: '👀 按住看词语',
       introDefault: '词语',
@@ -1068,6 +1078,16 @@
   }
 
   // 语文模式：一行一个词语；「词语 = 提示语」可选；顿号/逗号/分号可分隔多个词语
+  // 拆出词条末尾的拼音注释：「长（zhǎng）」→ {en:'长', py:'zhǎng'}
+  // 全角/半角括号都认；支持数字声调 zhang3
+  var PY_CH = 'a-zA-ZāáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜüńňǹêÊ';
+  var PY_TAIL = new RegExp('[（(]\\s*([' + PY_CH + ']+[1-5]?(?:\\s+[' + PY_CH + ']+[1-5]?)*)\\s*[）)]\\s*$');
+  function splitAnnot(raw) {
+    var m = PY_TAIL.exec(raw);
+    if (!m) return { en: raw, py: '' };
+    return { en: raw.slice(0, m.index).trim(), py: m[1].trim() };
+  }
+
   function parseEntriesZh(text) {
     var entries = [];
     text.split(/\n+/).forEach(function (line) {
@@ -1075,13 +1095,17 @@
       if (!line) return;
       var eq = line.indexOf('=');
       if (eq >= 0) {
-        var word = line.slice(0, eq).trim();
+        var head = splitAnnot(line.slice(0, eq).trim());
         var hint = line.slice(eq + 1).trim();
-        if (word && /[\u4e00-\u9fa5]/.test(word)) entries.push({ en: word, zh: hint });
+        if (head.en && /[\u4e00-\u9fa5]/.test(head.en)) {
+          entries.push({ en: head.en, zh: hint, py: head.py });
+        }
       } else {
         line.split(/[、，,；;]+/).forEach(function (seg) {
-          seg = seg.trim();
-          if (seg && /[\u4e00-\u9fa5]/.test(seg)) entries.push({ en: seg, zh: '' });
+          var head = splitAnnot(seg.trim());
+          if (head.en && /[\u4e00-\u9fa5]/.test(head.en)) {
+            entries.push({ en: head.en, zh: '', py: head.py });
+          }
         });
       }
     });
@@ -1095,7 +1119,9 @@
   function entriesToText(entries) {
     return entries.map(function (e) {
       if (typeof e === 'string') return e; // 兼容旧版保存的列表
-      if (appMode === 'zh') return e.en + (e.zh ? ' = ' + e.zh : '');
+      if (appMode === 'zh') {
+        return e.en + (e.py ? '（' + e.py + '）' : '') + (e.zh ? ' = ' + e.zh : '');
+      }
       return e.en + (e.zh ? ' ' + e.zh : '');
     }).join('\n');
   }
@@ -1152,6 +1178,7 @@
   bindSeg('broadcastSeg', function (v) { state.broadcast = v; });
   bindSeg('orderSeg', function (v) { state.order = v; });
   bindSeg('repeatSeg', function (v) { state.repeat = parseInt(v, 10); });
+  bindSeg('polySeg', function (v) { state.polyFix = v === '1'; });
 
   // ---------------- 时间 / 语速步进器（− / +） ----------------
   // 语速档位：0.5~1.2，一档一名（不重复），避免"点了没切换"的错觉。
@@ -1266,7 +1293,8 @@
   function snapshotSettings() {
     return {
       broadcast: state.broadcast, order: state.order, repeat: state.repeat,
-      repeatGap: state.repeatGap, interval: state.interval, rate: state.rate
+      repeatGap: state.repeatGap, interval: state.interval, rate: state.rate,
+      polyFix: state.polyFix !== false
     };
   }
   // 手动调整设置后调用：把当前设置保存到当前类型名下
@@ -1296,6 +1324,10 @@
     });
     document.querySelectorAll('#repeatSeg button').forEach(function (b) {
       b.classList.toggle('active', parseInt(b.dataset.v, 10) === state.repeat);
+    });
+    if (typeof s.polyFix === 'boolean') state.polyFix = s.polyFix;
+    document.querySelectorAll('#polySeg button').forEach(function (b) {
+      b.classList.toggle('active', (b.dataset.v === '1') === (state.polyFix !== false));
     });
     refreshSummary();
   }
@@ -1641,8 +1673,8 @@
   function normalizeEntries(list) {
     if (!Array.isArray(list)) return [];
     return list.map(function (e) {
-      if (typeof e === 'string') return { en: e.trim(), zh: '' };
-      if (e && typeof e.en === 'string') return { en: e.en.trim(), zh: e.zh || '' };
+      if (typeof e === 'string') return { en: e.trim(), zh: '', py: '' };
+      if (e && typeof e.en === 'string') return { en: e.en.trim(), zh: e.zh || '', py: e.py || '' };
       return null;
     }).filter(function (e) { return e && e.en; });
   }
@@ -1658,9 +1690,10 @@
       var k = e.en.toLowerCase();
       if (seen[k] !== undefined) {
         if (!result[seen[k]].zh && e.zh) result[seen[k]].zh = e.zh;
+        if (!result[seen[k]].py && e.py) result[seen[k]].py = e.py;
       } else {
         seen[k] = result.length;
-        result.push({ en: e.en, zh: e.zh });
+        result.push({ en: e.en, zh: e.zh, py: e.py || '' });
       }
     });
     return result;
@@ -1737,12 +1770,93 @@
     return state.entries[state.playOrder[state.idx]] || { en: '', zh: '' };
   }
 
+  // ---------------- 语文模式：多音字朗读校正 ----------------
+  // 浏览器的语音接口不支持 SSML 的 <phoneme>，无法直接指定单字读音，
+  // 于是改用「同音字替换」：把词语换成读音相同的别字再交给引擎，
+  // 屏幕显示仍然用原词条，学生看到的答案完全不受影响。
+  var POLY_TABLE = {"长处":"常处","长江":"常江","长短":"常短","银行":"银航","行业":"航业","内行":"内航","外行":"外航","重新":"虫新","重复":"虫复","重逢":"虫逢","音乐":"音月","乐器":"月器","处理":"楚理","相处":"相楚","处方":"楚方","出差":"出拆","差劲":"岔劲","睡觉":"睡叫","觉得":"觉的","调整":"条整","空调":"空条","投降":"投详","将领":"匠领","降落":"匠落","记载":"记宰","流血":"流写","露脸":"漏脸","供给":"供几","归还":"归环","系鞋带":"既鞋带","人参":"人身","称职":"趁职","对称":"对趁","扇风":"山风","磨面":"末面","弹琴":"谈琴","担子":"蛋子","倒水":"道水","和面":"活面","着落":"灼落","的确":"敌确","目的":"目地","奇数":"机数","不禁":"不今","阻塞":"阻色","晕车":"运车","咽喉":"烟喉","咽下":"燕下","供品":"共品","折本":"舌本","朝阳":"昭阳","放假":"放价","间断":"见断","尽力":"劲力","空白":"控白","铺床":"扑床","数数":"属数","宿舍":"宿设","星宿":"星绣","提防":"低防","因为":"因位","相貌":"向貌","高兴":"高性","应该":"英该","西藏":"西葬","挣扎":"挣闸","种树":"众树","传记":"赚记","创伤":"窗伤","分外":"份外","缝补":"逢补","仿佛":"仿扶","更换":"羹换","骨碌":"孤碌","会计":"快计","几乎":"机乎","教书":"交书","结实":"街实","看守":"堪守","地壳":"地鞘","落枕":"烙枕","抹布":"妈布","淹没":"淹末","歌曲":"歌取","似的":"是的","要求":"腰求","正月":"争月","干净":"肝净","干活":"赣活","背心":"被心","削铅笔":"消铅笔","劳累":"劳类","散文":"伞文","北斗":"北抖","投奔":"投笨"};
+  var POLY_KEYS = null;
+  // 音节 → 候选同音字（带声调），用于「长（zhǎng）」这种手动注释
+  var SYL_STR = 'a:啊|ba:吧|biàn:变遍辩|biào:鳔|bié:别|biān:编鞭边|biāo:标镖彪|biē:憋鳖|biǎn:匾贬扁|biǎo:表|bo:卜|bà:爸灞坝|bài:败拜|bàn:办瓣绊|bàng:镑棒磅|bào:报豹鲍|bá:拔跋|bái:白|bèi:备辈贝|bèn:笨|bèng:蹦迸泵|béng:甭|bì:必毕闭|bìng:病并|bí:鼻|bó:博搏驳|bù:布步不|bā:巴粑八|bān:班颁斑|bāng:帮邦浜|bāo:包胞|bēi:杯碑悲|bēn:锛奔|bēng:崩绷|běi:北|běn:苯本|bī:逼|bīn:滨斌宾|bīng:兵冰|bō:拨钵玻|bǎ:把靶钯|bǎi:摆百柏|bǎn:板版|bǎng:绑榜|bǎo:保宝饱|bǐ:笔彼比|bǐng:柄饼禀|bǔ:补捕|chuài:踹|chuàn:串|chuàng:创|chuán:船传|chuáng:床幢|chuí:锤垂棰|chuān:川穿|chuāng:窗|chuī:吹|chuō:戳|chuǎn:喘|chuǎng:闯|chà:姹汊|chàn:颤|chàng:唱畅|chá:茶槎查|chái:柴|chán:缠蝉馋|cháng:常尝肠|cháo:潮朝巢|chè:撤掣彻|chèn:衬趁|chèng:秤|chén:臣陈沉|chéng:成城程|chì:赤翅敕|chí:持迟驰|chòu:臭|chóng:崇虫|chóu:筹酬绸|chù:触矗处|chú:厨橱锄|chún:纯醇唇|chā:插叉|chāi:拆|chān:搀|chāng:昌|chāo:钞超抄|chē:车|chēn:琛嗔|chēng:撑称|chě:扯|chěng:逞|chī:嗤痴螭|chōng:充冲舂|chōu:抽|chū:出初|chūn:春|chǎn:产铲|chǎng:场厂|chǎo:炒吵|chǐ:齿尺|chǒng:宠|chǒu:瞅丑|chǔ:楚储杵|chǔn:蠢|cuàn:窜|cuì:翠脆|cuò:错挫|cuān:蹿|cuī:催崔|cuō:磋撮搓|cài:菜蔡|cái:财裁材|cán:残蚕|cáng:藏|cáo:曹槽漕|cè:测策侧|cèng:蹭|cén:涔|céng:层曾|cì:赐次刺|cí:词辞磁|còu:凑辏|cóng:丛从|cù:蹙促醋|cùn:寸|cún:存|cā:擦|cāi:猜|cān:参餐|cāng:舱仓苍|cāo:操|cōng:璁葱|cū:粗|cūn:村|cǎi:彩采踩|cǎn:惨|cǎo:草|cǐ:此|de:的|diàn:电殿店|diào:吊钓掉|dié:叠碟迭|diān:颠滇甸|diāo:雕貂|diē:爹跌|diū:丢|diǎn:点碘典|duàn:段断缎|duì:对队兑|duò:舵跺剁|duó:夺踱|duān:端|duī:堆|duō:多|duǎn:短|duǒ:躲朵|dà:大|dài:带代戴|dàn:蛋氮旦|dàng:档荡|dào:到盗稻|dá:鞑达答|dèng:瞪凳邓|dé:德得|dì:第帝递|dìng:定订锭|dí:笛迪敌|dòng:动冻洞|dòu:豆窦斗|dù:渡度杜|dùn:钝顿盾|dú:独读毒|dā:搭嗒|dāi:呆|dān:丹单担|dāng:当|dāo:刀|dēng:灯登蹬|děng:等|dī:低滴堤|dīng:叮丁盯|dōng:东冬|dōu:兜|dū:督|dūn:墩吨蹲|dǎ:打|dǎn:胆|dǎng:党挡|dǎo:岛导捣|dǐ:邸底抵|dǐng:顶鼎|dǒng:懂董|dǒu:抖陡|dǔ:赌笃堵|fàn:饭犯范|fàng:放|fá:罚伐乏|fán:凡烦钒|fáng:防房|fèi:费废肺|fèn:瀵粪愤|fèng:奉凤缝|féi:肥|fén:坟焚|féng:逢冯|fù:复赴负|fú:俘芙浮|fā:发|fān:翻幡番|fāng:芳方坊|fēi:飞非妃|fēn:纷芬分|fēng:风峰疯|fěi:斐匪|fěn:粉|fū:敷夫|fǎ:法|fǎn:返反|fǎng:访纺仿|fǒu:否|fǔ:府抚釜|guà:挂卦褂|guài:怪|guàn:惯贯罐|guàng:逛|guì:贵跪桂|guò:过|guó:国|guā:刮瓜|guāi:乖|guān:官关观|guāng:光|guī:归规瑰|guō:锅郭|guǎ:寡|guǎi:拐|guǎn:管馆|guǎng:广|guǐ:鬼轨|guǒ:裹椁果|gài:钙丐盖|gàn:赣|gào:诰告|gè:铬个各|gèng:更|gé:阁格隔|gòng:贡共|gòu:够购构|gù:故顾固|gùn:棍|gā:嘎|gāi:该|gān:肝杆甘|gāng:刚纲缸|gāo:糕高膏|gē:哥歌割|gēn:跟根|gēng:耕羹|gěi:给|gěng:梗绠|gōng:宫功公|gōu:沟钩勾|gū:孤姑箍|gǎi:改|gǎn:敢感赶|gǎng:岗港|gǎo:稿搞镐|gǒng:汞拱|gǒu:狗苟|gǔ:股鼓钴|gǔn:滚|huà:话画桦|huài:坏|huàn:换浣患|huá:华滑|huái:淮怀|huán:环桓寰|huáng:黄煌惶|huì:绘汇烩|huí:回蛔|huò:获货祸|huó:活|huā:花|huān:欢獾|huāng:慌荒|huī:挥灰恢|huǎn:缓|huǎng:幌谎恍|huǐ:悔毁|huǒ:夥火伙|hài:骇氦害|hàn:汉旱汗|hào:灏号浩|hái:还骸|hán:韩寒函|háng:航绗杭|háo:豪壕毫|hè:贺鹤褐|hèn:恨|hé:河禾阖|hén:痕|héng:恒衡横|hòu:后厚候|hóng:鸿洪宏|hóu:猴喉侯|hù:户护沪|hùn:混|hú:湖胡壶|hún:魂浑|hā:哈|hāi:嗨|hān:憨|hāo:蒿|hē:呵|hēi:黑嘿|hēng:哼亨|hěn:很狠|hōng:轰烘|hū:忽乎呼|hūn:婚昏荤|hǎi:海|hǎn:喊罕|hǎo:好|hǒu:吼|hǔ:虎唬|jià:架嫁驾|jiàn:剑建舰|jiàng:匠酱绛|jiào:叫较轿|jiá:颊|jiè:届界借|jié:截劫杰|jiù:就旧舅|jiā:加嘉佳|jiān:兼尖坚|jiāng:江姜僵|jiāo:交椒娇|jiē:街皆阶|jiě:解姐|jiū:揪鸠纠|jiǎ:甲钾假|jiǎn:减剪蹇|jiǎng:讲奖蒋|jiǎo:搅绞脚|jiǒng:炯迥|jiǔ:酒久灸|juàn:绢倦眷|jué:绝决诀|juān:娟鹃涓|juē:撅|juǎn:卷|jì:记计忌|jìn:进近晋|jìng:竟境静|jí:及即极|jù:具距聚|jùn:郡峻俊|jú:局菊|jī:击鸡基|jīn:今津斤|jīng:京荆茎|jū:琚居|jūn:军君钧|jǐ:挤戟几|jǐn:紧锦谨|jǐng:警景颈|jǔ:举榘咀|kuà:跨挎胯|kuài:快块|kuàng:矿旷况|kuáng:狂|kuì:愧溃|kuí:夔魁|kuò:阔扩括|kuā:夸|kuān:宽|kuāng:匡|kuī:盔窥亏|kuǎ:垮|kuǎn:款|kàn:看|kàng:抗炕|kào:靠|káng:扛|kè:克课恪|ké:壳咳|kòng:控|kòu:扣叩寇|kù:库裤酷|kùn:困|kā:喀|kāi:开揩|kān:刊勘堪|kāng:康|kē:颗珂科|kēng:铿坑|kě:可渴|kěn:肯啃恳|kōng:空|kōu:抠|kū:哭窟枯|kūn:坤昆|kǎ:卡|kǎi:凯|kǎn:砍坎|kǎo:考烤|kǒng:孔恐|kǒu:口|kǔ:苦|kǔn:捆|le:了|liàn:练链炼|liàng:辆谅量|liào:撂料廖|lián:连联莲|liáng:粮梁椋|liáo:辽寮聊|liè:烈劣列|liù:六|liú:流刘瘤|liū:溜|liǎ:俩|liǎn:脸敛|liǎng:两|liǔ:柳|luàn:乱|luò:洛落珞|luó:螺逻锣|luǎn:卵|luǒ:裸|là:辣腊蜡|lài:赖|làn:烂滥|làng:浪|lào:烙|lá:剌|lái:来莱|lán:兰拦栏|láng:廊狼郎|láo:劳牢|lè:乐|lèi:类泪|lèng:愣|léi:雷|léng:棱楞|lì:力利历|lìng:另令|lí:梨黎犁|lín:林临邻|líng:灵陵龄|lòu:镂漏|lóng:龙隆笼|lóu:楼|lù:录禄璐|lùn:论|lú:胪炉卢|lún:轮伦|lüè:略掠|lā:拉|lāng:啷|lāo:捞|lēi:勒|lěi:垒|lěng:冷|līn:拎|lūn:抡|lǎ:喇|lǎn:懒揽览|lǎng:朗|lǎo:老姥佬|lǐ:李理礼|lǐn:凛|lǐng:领岭|lǒng:拢|lǒu:搂|lǔ:鲁虏掳|lǘ:驴|lǚ:旅屡吕|lǜ:律氯率|ma:嘛|me:么|men:们|miàn:面|miào:庙妙|mián:棉绵眠|miáo:苗瞄描|miè:灭|miāo:喵|miǎn:沔缅免|miǎo:秒|mà:骂杩|mài:卖麦迈|màn:漫曼慢|mào:帽茂冒|má:麻|mái:埋|mán:瞒蛮|máng:忙盲芒|máo:茅矛毛|mèi:妹昧|mèn:焖闷|mèng:梦孟|méi:枚煤梅|mén:门|méng:蒙盟|mì:密觅蜜|mìng:命|mí:弥迷谜|mín:民|míng:鸣铭名|mò:默漠末|mó:魔膜谟|móu:谋|mù:墓木目|mā:妈|māo:猫|měi:每美浼|měng:猛锰|mī:眯咪|mō:摸|mǎ:马码玛|mǎi:买|mǎn:满|mǎng:蟒|mǐ:米|mǐn:敏闽抿|mǒ:抹|mǒu:某|mǔ:亩姆牡|niàn:念|niào:尿|nián:年|niáng:娘|niè:镍涅|niú:牛|niān:拈|niē:捏|niǎn:辇碾撵|niǎo:鸟|niǔ:纽扭|nuò:诺喏|nuó:挪|nuǎn:暖|nà:纳钠那|nài:奈耐|nào:闹淖|ná:拿|nán:男南难|náng:囊|náo:挠|nèi:内|nèn:嫩恁|néng:能|nì:逆腻|ní:霓泥尼|nín:您|níng:凝宁拧|nòng:弄|nóng:浓农|nù:怒|nú:奴|nī:妮|nǎ:哪|nǎi:奶氖乃|nǎo:脑恼瑙|nǐ:你拟|nǔ:努弩|nǚ:女|piàn:骗片|piào:票|pián:谝|piān:偏篇|piāo:飘|piē:瞥撇|piǎo:瞟|pà:怕帕|pài:派|pàn:判畔叛|pàng:胖|pào:炮泡|pá:爬|pái:牌排|pán:盘|páng:庞旁|páo:袍|pèi:配佩|pèng:碰|péi:陪赔裴|pén:盆|péng:棚鹏彭|pì:屁僻辟|pìn:聘|pí:皮疲毗|pín:频贫|píng:凭瓶评|pò:破迫|pó:婆|pù:铺|pú:濮蒲葡|pā:啪|pāi:拍|pān:攀潘|pāo:抛|pēi:呸胚|pēn:喷|pēng:砰|pěng:捧|pī:披批劈|pīn:拼姘|pīng:娉|pō:坡泼泊|pū:噗扑|pǎo:跑|pǐ:匹|pǐn:品|pǒ:颇|pǔ:谱普浦|qià:恰|qiàn:欠堑歉|qiào:撬窍鞘|qián:钱潜黔|qiáng:墙强|qiáo:瞧桥侨|qiè:妾窃怯|qióng:穷琼|qiú:求球裘|qiā:掐|qiān:千迁牵|qiāng:枪羌腔|qiāo:敲悄|qiě:且|qiū:秋丘|qiǎn:浅遣|qiǎng:抢|qiǎo:巧|quàn:劝券|quán:全权拳|què:却确鹊|quān:圈|quē:缺阙|quǎn:犬|qì:器弃气|qìn:沁|qìng:庆|qí:骑旗蕲|qín:秦琴擒|qíng:情晴|qù:去趣|qú:渠|qún:群裙|qī:欺七期|qīn:钦亲侵|qīng:轻倾卿|qū:趋驱区|qǐ:起绮启|qǐn:寝|qǐng:请顷|qǔ:取娶|ruì:睿瑞锐|ruò:弱若|ruǎn:软阮|ràng:让|rào:绕|rán:然燃|ráo:饶娆|rè:热|rèn:认刃任|rén:人仁|réng:仍|rì:日|ròu:肉|róng:荣溶蓉|róu:柔揉|rù:入|rùn:润|rú:如儒濡|rēng:扔|rě:惹|rěn:忍|rōng:茸|rǎn:染|rǎng:嚷|rǎo:扰|rǔ:汝乳辱|shuài:帅|shuì:睡税|shuí:谁|shuò:硕朔|shuā:刷|shuāi:摔衰|shuān:拴|shuāng:双霜|shuō:说|shuǎ:耍|shuǎi:甩|shuǎng:爽|shuǐ:水|shài:晒|shàn:善擅膳|shàng:上尚|shào:绍哨|shá:啥|sháo:苕勺|shè:设社摄|shèn:肾渗甚|shèng:剩胜圣|shé:蛇舌|shén:神什|shéng:绳|shì:世势室|shí:时十实|shòu:授兽瘦|shù:树述竖|shùn:顺舜|shú:赎熟|shā:杀砂纱|shāi:筛|shān:山珊衫|shāng:伤商|shāo:烧稍梢|shēn:深伸申|shēng:生升笙|shě:舍|shěn:审婶沈|shěng:省|shī:师诗尸|shōu:收|shū:书输叔|shǎ:傻|shǎn:闪陕|shǎng:赏|shǎo:少|shǐ:使史始|shǒu:手首守|shǔ:蜀鼠署|suàn:算蒜|suì:岁碎穗|suí:随隋|suān:酸|suī:虽|suō:缩娑梭|suǒ:所锁索|sà:萨|sài:赛|sàn:散|sàng:丧|sè:涩瑟色|sì:四祀嗣|sòng:送宋颂|sù:素速肃|sú:俗|sā:撒|sāi:腮鳃塞|sān:三|sāng:桑|sāo:搔|sēn:森|sēng:僧|sī:丝私厮|sōng:松|sōu:艘搜|sū:苏酥|sūn:孙|sǎ:洒|sǎn:伞|sǎo:嫂扫|sǐ:死|sǒng:耸|sǔn:损|tiào:跳|tián:田甜填|tiáo:条|tiān:天添|tiē:贴帖|tiě:铁|tiǎn:舔|tuán:团|tuì:退褪|tuó:驼陀驮|tuī:推|tuō:托脱拖|tuǐ:腿|tuǒ:妥|tà:榻踏|tài:态泰钛|tàn:碳炭叹|tàng:烫趟|tào:套|tái:台抬苔|tán:谈坛痰|táng:唐堂糖|táo:逃淘桃|tè:特忒|téng:疼腾藤|tì:替剃|tí:题提蹄|tíng:停亭廷|tòng:痛|tòu:透|tóng:铜同童|tóu:头投|tù:兔|tú:图徒途|tún:臀屯|tā:他她它|tāi:胎|tān:滩贪摊|tāng:汤|tāo:韬涛掏|tī:踢梯|tīng:厅听汀|tōng:通|tōu:偷|tū:突秃凸|tūn:吞|tǎ:塔|tǎn:坦|tǎng:躺倘淌|tǎo:讨|tǐ:体|tǐng:艇挺|tǒng:统桶捅|tǔ:土吐|wài:外|wàn:腕万|wàng:望旺忘|wá:娃|wán:玩丸顽|wáng:王亡|wèi:未喂卫|wèn:问璺|wèng:瓮|wéi:围维韦|wén:文闻纹|wò:卧握斡|wù:物误雾|wú:芜无吴|wā:挖娲蛙|wāi:歪|wān:湾弯|wāng:汪|wēi:微威薇|wēn:温|wēng:翁|wěi:伪纬伟|wěn:吻稳|wō:窝倭|wū:屋呜钨|wǎ:瓦|wǎn:晚碗挽|wǎng:网往枉|wǒ:我|wǔ:五武舞|xià:下夏吓|xiàn:县现线|xiàng:向像项|xiào:笑孝效|xiá:辖峡侠|xián:弦嫌闲|xiáng:详祥|xiè:谢卸蟹|xié:携胁协|xióng:雄熊|xiù:绣秀袖|xiā:瞎虾|xiān:先仙鲜|xiāng:乡香湘|xiāo:消萧销|xiē:些歇|xiě:写|xiōng:胸凶匈|xiū:修羞休|xiǎn:显险|xiǎng:想响享|xiǎo:小晓|xuán:璇悬漩|xuè:血|xué:学穴踅|xuān:宣轩萱|xuē:薛靴削|xuě:雪|xuǎn:选|xì:细隙系|xìn:信|xìng:性杏姓|xí:袭席习|xíng:型形刑|xù:叙序续|xùn:讯训逊|xú:徐|xún:循寻巡|xī:西浠吸|xīn:新心锌|xīng:星惺腥|xū:须虚墟|xūn:勋熏|xǐ:喜洗徙|xǐng:醒|xǔ:许|yuàn:院愿垸|yuán:元原源|yuè:跃岳粤|yuān:冤渊箢|yuē:曰约|yuǎn:远|yà:亚轧|yàn:宴艳厌|yàng:样|yào:药耀要|yá:崖芽牙|yán:盐严岩|yáng:杨阳羊|yáo:摇窑遥|yè:页业夜|yé:爷耶|yì:亦义易|yìn:胤印|yìng:硬映|yí:宜仪夷|yín:银吟淫|yíng:营赢瀛|yòng:用|yòu:又右佑|yóu:尤铀邮|yù:欲玉愈|yùn:韵孕运|yú:鱼瑜舆|yún:云郧匀|yā:鸭压押|yān:嫣烟焉|yāo:腰邀幺|yě:冶也野|yī:伊一依|yīn:因音阴|yīng:鹰婴瑛|yō:哟|yōng:拥鳙庸|yōu:幽忧优|yū:淤|yūn:晕|yǎ:雅哑|yǎn:眼演掩|yǎng:养氧仰|yǎo:咬|yǐ:蚁以已|yǐn:引隐饮|yǐng:影颖郢|yǒng:勇永咏|yǒu:友有|yǔ:禹宇语|yǔn:允|zhe:着|zhuàn:馔篆赚|zhuàng:状撞壮|zhuì:坠缀|zhuó:灼浊啄|zhuā:抓|zhuān:专砖|zhuāng:装桩妆|zhuī:锥追|zhuō:捉桌|zhuǎn:转|zhà:诈榨炸|zhài:债寨|zhàn:战绽蘸|zhàng:帐仗杖|zhào:照诏赵|zhá:闸札|zhái:宅|zhè:浙这|zhèn:镇阵朕|zhèng:证郑正|zhé:哲折|zhì:制置质|zhí:直职值|zhòng:重众|zhòu:皱绉咒|zhóu:轴|zhù:住驻铸|zhú:竹逐烛|zhā:渣扎楂|zhāi:斋摘|zhān:毡瞻粘|zhāng:张璋章|zhāo:钊招昭|zhē:遮|zhēn:真针珍|zhēng:争睁征|zhě:者|zhěn:诊枕|zhěng:整|zhī:织芝之|zhōng:钟终忠|zhōu:州周洲|zhū:诸猪珠|zhǎ:眨|zhǎi:窄|zhǎn:斩展盏|zhǎng:掌长涨|zhǎo:找爪|zhǐ:纸止旨|zhǒng:肿冢种|zhǒu:肘|zhǔ:煮渚拄|zhǔn:准|zi:子|zuàn:攥|zuì:罪醉最|zuò:做坐座|zuān:钻|zuǐ:嘴|zuǒ:左佐|zài:在再载|zàn:暂赞|zàng:葬脏|zào:灶造燥|zá:砸杂|zán:咱|záo:凿|zèng:赠|zé:则责泽|zéi:贼|zì:自字|zòng:纵|zòu:奏|zú:镞足族|zāi:灾哉栽|zāo:遭糟|zēng:增|zěn:怎|zī:缁资孳|zōng:宗棕踪|zū:租|zūn:尊遵|zǎ:咋|zǎi:宰|zǎo:早藻枣|zǐ:紫姊梓|zǒng:总|zǒu:走|zǔ:组阻祖|ài:爱碍艾|àn:按暗案|ào:奥澳|ái:癌|áng:昂|áo:鳌熬|è:鄂饿鳄|èr:二贰|é:俄额娥|ér:而儿|ā:阿|āi:哎哀唉|ān:安氨鞍|āo:凹|ēn:恩|ěr:尔饵耳|ń:嗯|ō:噢|ōu:欧|ǎi:矮|ǎn:俺|ǎo:袄|ǒu:藕偶';
+  var SYL_MAP = null;
+
+  function sylMap() {
+    if (!SYL_MAP) {
+      SYL_MAP = {};
+      SYL_STR.split('|').forEach(function (p) {
+        var i = p.indexOf(':');
+        if (i > 0) SYL_MAP[p.slice(0, i)] = p.slice(i + 1);
+      });
+    }
+    return SYL_MAP;
+  }
+
+  // 数字声调转声调符号：zhang3 → zhǎng
+  var TONE_MARKS = { a: 'āáǎà', e: 'ēéěè', i: 'īíǐì', o: 'ōóǒò', u: 'ūúǔù', 'ü': 'ǖǘǚǜ' };
+  function numToTone(syl) {
+    var m = /^([a-zA-ZüÜ]+)([1-5])$/.exec(syl);
+    if (!m) return syl.toLowerCase();
+    var body = m[1].toLowerCase(), t = parseInt(m[2], 10) - 1;
+    if (t < 0 || t > 3) return body;
+    var target = body.indexOf('a') >= 0 ? 'a'
+      : body.indexOf('e') >= 0 ? 'e'
+      : body.indexOf('ou') >= 0 ? 'o'
+      : body.charAt(body.length - 1);
+    if (!TONE_MARKS[target]) return body;
+    var idx = body.lastIndexOf(target);
+    return body.slice(0, idx) + TONE_MARKS[target].charAt(t) + body.slice(idx + 1);
+  }
+
+  // 多音字集合：只有落在集合里的字才需要替换，单音字保持原样
+  var POLY_CHARS = '一丁七万上不与且丙丞丧个中串为主丽乃么之乌乍乐乘乙九乞也乾了予事于亏井些亡亨亮亲什仅仆仇介从仔他仙令以们仰件价任份仿伏休众优伙会传伯估伴似伽佃但位体何余佛作佣佬例供依侧侯侵便促俊俏俞信俩俱俸俺倍倒倘倚倭假偕傅傍僧僭儿兀允兄光免兑兔八六共兴其典兹内册冒写冠冥冯冰冲冷净凉凌几凹凿刀分切划列创刨别刷券刺刻削剌前剥副剿劈助劲勒募勤勺勾勿匀包化北匡匪区医半华卑卒卓单南卜卞占卡卤印卵卷厂厄压厘去参叉反发取受古句只召可台叱叶号司叹吁吃各合同名吐吓吗吞吟否吧吨含听吱吴吵吹吾呀呆呈告呐员呛呢味呵呼咀咋和咦咧咪咬咯咱咳咸咽哄哇哈哑哗哟哦哨哩哪哼唇唉唔唬售唯啄啊啥啦喀喇喊喏喜喝喷嗒嗔嗟嗨嗯嗳嘎嘛嘿噢嚷嚼囊团园圈土圣地场均坊坎坏坑块垂垸埃埋堆堕堡堤堪堵塌塔塞填增墨声壳处夏夕大太夫失头夸夹奇奋奏契奔套奥女奸她好妃妄妓妖妗妙妮妻姐姓委姘姚姣姥姬姿娃娆娉娑娜娶媒子宁它宅守完客害家容宿察寨寰寸寺寻封射将尉少尚尹尺尼尽尾尿居屈屎屏属屯岂岗岭嵌巡巢巨差己已巳巷币市帆帕帖帘帧幅幕幢干平年并幸幺幼广庄庇应底度庵庶康庸廖异弄式弟弹强当彦彬彭往待得徙御忍忒忘忧怀怔怕怜思怠怨恁恃恍恶悄悖惊惟惹愁意感慌慎慢懿戎戏或戚房扁扇才扎扑扒打扔扛扫扭扮扰扳扶批找承技抄把投抗折抡抢抬抱抵抹押拂担拆拈拉拌拍拎拒拔拖拚招拜拧择括拱拴拼拽拾指挎挑挟挡挣挨挫振挺捂捆捋捎捐捧据捶捷捻掀掉掏排掘掠探接控掩掷描提插揖握揣揩揭援搁搂搓搔搜搞搬搭摩摸摹撅撇撒撕撩播撮撰攒支放政敌救敕教散数斗料斜斡斥斯方於施旁旋族无既昂昆昌明昏昔昙映春昧昭是晃晕景智暇暖暨暴曲更曾最月有服朝期末本札术朱机杂杆杈杉杜杭枉析枕果枝枯枷柏某柑柜查柱柴栎栖校样核格栽桃梢梭梯棋棍棣棰棱棵棺椅椎楂楞概榜槽模横橙檀檐次款歇正歪殖殷毁母毒比毛氏氐气汀汁汗池汤汪沈沙没油治沽沾沿泄泊泛泡波泣泥注泵洁洋洒洗洞活派浅浆济浜浩浪浸涂涉涌涓涔涨液涵淋淌淑淖淡淫淳混添清渐渝渠温港渴游溃溅溜溪溯溴滇滋滑漂漆漏演漕潘潭澄澳澶澹激濂濡瀹灌火灯炎炕炮炸烙烛烟焉焚焦煎煞煨熏熙熟熬燕燥爆爪父爽片牙牢犹狂狄狠狼猎猫獾玄率王珞琅瓦甘甚甫甭甯由甸畏留畜番疆疑症痒痕癌登白百的皇皖监盒盖盛盟盯相盼盾省看眠眯眼着瞟瞥矣知石砌研砥砰硅硫硬碌碟碱磅磕磨磴磷示祖祝神祠票祭禁禅福离种科秘租秤积称移稍税稽穴究空穿窒窖窗立站章童笼筋筑筒答箢簇簿籍粘粥精糊系累繁红纤约纪纹经结绕给络绷绿缝缩缴缺罕罗罢羹羽翁翘而耐耗耙耳耶聊聘肆肉肋肌肖肚肢肥肩育肺胆背胖胜胞胯胶胺能脂脉脊脏脖脚脱脾腊腌腔膏膛膨臂臭至致舂舌舍舒舔般良色艾节芒芥芯芸苑苔苕苟若苦英苻茧茫茬茸荃草荒荤荫荷莎莫菌菲落著葛葡董葱蒙蒲蒿蓝蓬蔡蕃薄藉藏藩虎虑虫虹虾蚌蚕蛇蛙蛾蜡螅蟒血行衙衣衰衷袍被裂裴褚褪要见观觉角解言詹许论识诘语说读谁调谜谝谷豫貌贾赚赦赫赶趁超越趟趣足跋跌跑跨路跳踅踏踢踩踱踹蹄蹬蹭蹲身躺车轧转轴载辟辨边达过迎运还这迦迫迭迷迹追适透逐逗通逛逞造逢逮逾遂遇道遗遣邑邓邢那邪邺郎郢部郭都酮醋醒采里重野量金钉钢钯钻铅铮铺锏锯镐长间闷阙阮阻阿陀附陆降限除陶隆隋隔隘隶难雀雅雇雨零雷需震霍露霸青非革靶鞋鞘顿颇颈颤食餐饮驮骨骸高魁魏鲜鸟鹿麻麽鼎齐龟';
+
+  function isPolyChar(ch) { return POLY_CHARS.indexOf(ch) >= 0; }
+
+  // 按注释拼音逐字换成同音字，保证引擎只能读出指定声调
+  function annotatedReading(word, py) {
+    var syl = py.trim().replace(/\s+/g, ' ').split(' ');
+    if (syl.length !== word.length) return '';
+    var map = sylMap(), out = '';
+    for (var i = 0; i < word.length; i++) {
+      var ch = word.charAt(i);
+      if (!isPolyChar(ch)) { out += ch; continue; }
+      var cands = map[numToTone(syl[i])] || '';
+      var pick = '';
+      for (var j = 0; j < cands.length; j++) {
+        if (cands.charAt(j) !== ch) { pick = cands.charAt(j); break; }
+      }
+      out += pick || ch;
+    }
+    return out;
+  }
+
+  // 按校对表做子串替换（长词优先，避免「重要」被「重」抢先匹配）
+  function applyPolyTable(s) {
+    if (!POLY_KEYS) POLY_KEYS = Object.keys(POLY_TABLE).sort(function (a, b) { return b.length - a.length; });
+    for (var i = 0; i < POLY_KEYS.length; i++) {
+      var k = POLY_KEYS[i];
+      if (s.indexOf(k) >= 0) s = s.split(k).join(POLY_TABLE[k]);
+    }
+    return s;
+  }
+
+  // 词条最终交给语音引擎的文本：手动注释 > 校对表 > 原文
+  function readingText(e) {
+    var s = e.en.replace(/[=＝]/g, '，');
+    if (e.py) {
+      var r = annotatedReading(e.en, e.py);
+      if (r) return r;
+    }
+    if (state.polyFix === false) return s;
+    return applyPolyTable(s);
+  }
+
   // 本次要播报的文本：
   //  英语模式：报中文读释义，报英文读词条（把 "=" 换成停顿，避免读成 "equals"）
   //  语文模式：读词语本身（"=" 换成中文逗号停顿）
   function broadcastText() {
     var e = currentEntry();
-    if (appMode === 'zh') return e.en.replace(/[=＝]/g, '，');
+    if (appMode === 'zh') return readingText(e);
     if (state.broadcast === 'zh' && e.zh) return e.zh;
     return e.en.replace(/[=＝]/g, ', ');
   }
@@ -2105,6 +2219,7 @@
         order: state.order, repeat: state.repeat, repeatGap: state.repeatGap,
         interval: state.interval, rate: state.rate,
         broadcast: state.broadcast,
+        polyFix: state.polyFix !== false,
         lastWords: $('wordInput').value
       }));
     } catch (e) {}
@@ -2120,6 +2235,8 @@
     state.interval = (saved && saved.interval) || 5;
     state.rate = clampRate((saved && saved.rate) || 0.8);
     state.broadcast = (saved && saved.broadcast) || c.defaultBroadcast;
+    // 旧版存档没有 polyFix 字段，默认视为开启
+    state.polyFix = saved ? saved.polyFix !== false : true;
     $('wordInput').value = (saved && saved.lastWords) ? saved.lastWords : '';
     state.contentType = ''; // 交给 refreshCount 重新识别
     applySettings(snapshotSettings());
@@ -2138,6 +2255,10 @@
     $('peekBtn').textContent = c.peekLabel;
     $('broadcastSeg').innerHTML = c.broadcastSegHTML;
     $('broadcastHint').textContent = c.broadcastHint;
+    // 多音字校正只对语文模式有意义
+    var isZh = appMode === 'zh';
+    $('polyRow').style.display = isZh ? '' : 'none';
+    $('polyHint').style.display = isZh ? '' : 'none';
     document.querySelectorAll('#modeSwitch button').forEach(function (b) {
       b.classList.toggle('active', b.dataset.mode === appMode);
     });
