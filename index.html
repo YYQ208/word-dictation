@@ -1,0 +1,2182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>单词默写小助手</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: linear-gradient(160deg, #FFF7E6 0%, #E8F4FF 50%, #F0E8FF 100%);
+    min-height: 100vh;
+    color: #333;
+    padding: 16px;
+  }
+  .app { max-width: 560px; margin: 0 auto; }
+
+  header {
+    text-align: center;
+    padding: 18px 0 8px;
+  }
+  header h1 { font-size: 26px; color: #FF6B35; letter-spacing: 1px; }
+  header p { font-size: 13px; color: #999; margin-top: 4px; }
+
+  /* 英语 / 语文 模式切换 */
+  .mode-switch {
+    display: flex;
+    background: #fff;
+    border-radius: 999px;
+    padding: 4px;
+    margin-top: 14px;
+    box-shadow: 0 4px 16px rgba(120, 100, 200, 0.08);
+  }
+  .mode-switch button {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 11px 0;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: bold;
+    color: #999;
+    cursor: pointer;
+    font-family: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mode-switch button.active { background: #6C5CE7; color: #fff; }
+
+  .card {
+    background: #fff;
+    border-radius: 20px;
+    padding: 20px;
+    margin-top: 14px;
+    box-shadow: 0 4px 16px rgba(120, 100, 200, 0.08);
+  }
+  .card h2 {
+    font-size: 16px;
+    color: #6C5CE7;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* 单词输入 */
+  textarea {
+    width: 100%;
+    min-height: 200px;
+    border: 2px solid #E6E0FA;
+    border-radius: 14px;
+    padding: 14px;
+    font-size: 17px;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+    transition: border-color .2s;
+    line-height: 1.9;
+  }
+  textarea:focus { border-color: #6C5CE7; }
+  .hint { font-size: 12px; color: #aaa; margin-top: 6px; }
+  .type-badge {
+    display: none;
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #F0EDFF;
+    color: #6C5CE7;
+    font-size: 12px;
+  }
+  .type-badge.show { display: inline-block; }
+
+  .list-tools { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .list-tools input {
+    flex: 1;
+    min-width: 100px;
+    border: 2px solid #E6E0FA;
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 14px;
+    outline: none;
+  }
+  .saved-lists { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #F3F0FF;
+    color: #6C5CE7;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    border: none;
+  }
+  .chip .del { color: #ccc; font-weight: bold; }
+  .chip .del:hover { color: #e74c3c; }
+
+  /* 设置项 */
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px dashed #eee;
+  }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-row .label { font-size: 15px; }
+  .setting-row .value { font-size: 13px; color: #FF6B35; font-weight: bold; min-width: 56px; text-align: right; margin-left: 8px; }
+
+  /* − / + 步进器 */
+  .stepper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 12px;
+  }
+  .stepper .step-btn {
+    width: 38px;
+    height: 38px;
+    border: none;
+    border-radius: 12px;
+    background: #F3F0FF;
+    color: #6C5CE7;
+    font-size: 22px;
+    font-weight: bold;
+    line-height: 1;
+    cursor: pointer;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .stepper .step-btn:active { transform: scale(.9); background: #E6E0FA; }
+  .stepper .step-btn:disabled { opacity: .35; cursor: default; transform: none; }
+  .stepper .step-val {
+    min-width: 52px;
+    text-align: center;
+    font-size: 15px;
+    font-weight: bold;
+    color: #FF6B35;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .seg { display: flex; background: #F3F0FF; border-radius: 12px; padding: 3px; }
+  .seg button {
+    border: none;
+    background: transparent;
+    padding: 7px 16px;
+    border-radius: 9px;
+    font-size: 14px;
+    color: #888;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .seg button.active { background: #6C5CE7; color: #fff; font-weight: bold; }
+
+  input[type="range"] {
+    flex: 1;
+    margin-left: 12px;
+    accent-color: #FF6B35;
+    height: 28px;
+  }
+
+  /* 大按钮 */
+  .big-btn {
+    display: block;
+    width: 100%;
+    margin-top: 16px;
+    border: none;
+    border-radius: 18px;
+    padding: 16px;
+    font-size: 20px;
+    font-weight: bold;
+    font-family: inherit;
+    cursor: pointer;
+    color: #fff;
+    background: linear-gradient(135deg, #FF6B35, #FF922B);
+    box-shadow: 0 6px 0 #E8590C, 0 8px 16px rgba(232, 89, 12, .25);
+    transition: transform .1s, box-shadow .1s;
+  }
+  .big-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #E8590C; }
+
+  /* 默写界面 */
+  #playView { display: none; }
+  .progress-wrap {
+    background: #F0EBFF;
+    border-radius: 999px;
+    height: 14px;
+    overflow: hidden;
+    margin: 8px 0 4px;
+  }
+  .progress-bar {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #6C5CE7, #A29BFE);
+    transition: width .3s;
+  }
+  .progress-text { text-align: center; font-size: 13px; color: #999; }
+
+  .word-stage {
+    text-align: center;
+    padding: 34px 10px;
+  }
+  .word-count { font-size: 14px; color: #aaa; }
+  .word-display {
+    font-size: 42px;
+    font-weight: bold;
+    color: #333;
+    letter-spacing: 3px;
+    min-height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 8px 0;
+    font-family: "Comic Sans MS", "Chalkboard SE", "PingFang SC", sans-serif;
+  }
+  .word-hidden { color: transparent; text-shadow: 0 0 24px rgba(108, 92, 231, .5); user-select: none; }
+  .speaking-badge {
+    display: inline-block;
+    font-size: 13px;
+    color: #6C5CE7;
+    background: #F3F0FF;
+    padding: 4px 14px;
+    border-radius: 999px;
+    opacity: 0;
+    transition: opacity .2s;
+  }
+  .speaking-badge.on { opacity: 1; animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .4; } }
+
+  .peek-btn {
+    margin-top: 8px;
+    border: 2px dashed #DDD6FE;
+    background: transparent;
+    color: #999;
+    border-radius: 12px;
+    padding: 8px 18px;
+    font-size: 14px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .controls {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .ctrl-btn {
+    border: none;
+    border-radius: 14px;
+    padding: 14px 4px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    background: #F3F0FF;
+    color: #6C5CE7;
+    font-weight: bold;
+  }
+  .ctrl-btn .ico { display: block; font-size: 22px; margin-bottom: 3px; }
+  .ctrl-btn.main {
+    background: linear-gradient(135deg, #6C5CE7, #A29BFE);
+    color: #fff;
+  }
+  .ctrl-btn:active { transform: scale(.95); }
+
+  .collapse-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+  }
+  .collapse-head h2 { margin-bottom: 0; }
+  .collapse-head .arrow {
+    color: #bbb;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+  .collapse-body { display: none; padding-top: 6px; }
+  .collapse-body.open { display: block; }
+
+  /* 同名冲突弹窗 */
+  .modal-mask {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(40, 30, 80, .45);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-mask.open { display: flex; }
+  .modal-card {
+    background: #fff;
+    border-radius: 18px;
+    padding: 24px 22px;
+    max-width: 380px;
+    width: 100%;
+    box-shadow: 0 12px 40px rgba(40, 30, 80, .3);
+  }
+  .modal-card h3 { font-size: 17px; color: #333; margin-bottom: 10px; }
+  .modal-card p { font-size: 14px; color: #777; line-height: 1.7; margin-bottom: 18px; }
+  .modal-btns { display: flex; flex-direction: column; gap: 8px; }
+  .modal-btns button {
+    border: none;
+    border-radius: 12px;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: bold;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .modal-btns .m-overwrite { background: linear-gradient(135deg, #FF6B35, #FF922B); color: #fff; }
+  .modal-btns .m-merge { background: #F3F0FF; color: #6C5CE7; }
+  .modal-btns .m-rename { background: transparent; color: #999; border: 2px dashed #DDD6FE; }
+  .modal-btns button:active { transform: scale(.97); }
+
+  .chip .edit { color: #bbb; }
+  .chip .edit:hover { color: #6C5CE7; }
+
+  /* 列表较多时的下拉框模式 */
+  .list-dropdown { display: flex; gap: 8px; width: 100%; margin-top: 2px; }
+  .list-dropdown select {
+    flex: 1;
+    min-width: 0;
+    border: 2px solid #E6E0FA;
+    border-radius: 12px;
+    padding: 9px 10px;
+    font-size: 14px;
+    font-family: inherit;
+    background: #fff;
+    color: #333;
+    outline: none;
+  }
+  .list-dropdown select:focus { border-color: #6C5CE7; }
+  .list-dropdown .mini-btn {
+    border: none;
+    border-radius: 12px;
+    background: #F3F0FF;
+    color: #6C5CE7;
+    padding: 0 14px;
+    font-size: 15px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .list-dropdown .mini-btn:active { transform: scale(.93); }
+  .list-dropdown-hint { width: 100%; font-size: 12px; color: #bbb; margin-top: 2px; }
+
+  /* 列表分组标签 + 搜索 */
+  .list-search {
+    width: 100%;
+    border: 2px solid #E6E0FA;
+    border-radius: 12px;
+    padding: 9px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    background: #fff;
+    color: #333;
+    outline: none;
+    box-sizing: border-box;
+    margin-bottom: 8px;
+  }
+  .list-search:focus { border-color: #6C5CE7; }
+  .group-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .group-tab {
+    border: none;
+    border-radius: 10px;
+    padding: 5px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    background: #F3F0FF;
+    color: #6C5CE7;
+    cursor: pointer;
+  }
+  .group-tab.active {
+    background: #6C5CE7;
+    color: #fff;
+  }
+  .group-tab .tab-count {
+    font-size: 11px;
+    opacity: .75;
+    margin-left: 2px;
+  }
+
+  /* 开始按钮上的设置摘要 */
+  .btn-summary {
+    display: block;
+    font-size: 12px;
+    font-weight: normal;
+    opacity: .85;
+    margin-top: 3px;
+  }
+
+  .back-btn {
+    margin-top: 14px;
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: #bbb;
+    font-size: 14px;
+    padding: 10px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  /* 完成页 */
+  #doneView { display: none; text-align: center; }
+  .done-emoji { font-size: 72px; margin: 20px 0 6px; }
+  .done-title { font-size: 22px; font-weight: bold; color: #FF6B35; }
+  .done-sub { font-size: 14px; color: #999; margin-top: 6px; }
+
+  /* 完成页的次要按钮（再默写一次）：比主按钮弱，但仍是明确的按钮 */
+  .second-btn {
+    display: block;
+    width: 100%;
+    margin-top: 12px;
+    border: 1px solid #E4DFF7;
+    background: #F7F5FF;
+    color: #6C5CE7;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    border-radius: 16px;
+    padding: 13px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background .12s;
+  }
+  .second-btn:active { background: #EDE8FF; }
+
+  /* 完成页：本次默写内容回看（方便批改） */
+  .review {
+    text-align: left;
+    margin-top: 18px;
+    background: #FAF8FF;
+    border: 1px solid #EFEAFF;
+    border-radius: 14px;
+    padding: 12px 14px;
+  }
+  .review-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #6C5CE7;
+    margin-bottom: 6px;
+  }
+  .review-count { font-weight: normal; color: #A9A3BE; font-size: 12px; }
+  .review-list {
+    list-style: none;
+    counter-reset: rv;
+    max-height: 300px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .review-item {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    column-gap: 8px;
+    row-gap: 1px;
+    padding: 8px 0;
+    border-bottom: 1px dashed #EDE9FA;
+    line-height: 1.45;
+  }
+  .review-item:last-child { border-bottom: none; }
+  .review-item::before {
+    counter-increment: rv;
+    content: counter(rv);
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    text-align: right;
+    padding-top: 2px;
+    font-size: 12px;
+    color: #BBB5D0;
+    font-variant-numeric: tabular-nums;
+  }
+  .review-en {
+    grid-column: 2;
+    font-size: 15px;
+    font-weight: 600;
+    color: #2F2A45;
+    word-break: break-word;
+  }
+  .review-zh {
+    grid-column: 2;
+    font-size: 13px;
+    color: #8A84A8;
+    word-break: break-word;
+  }
+  .review-tip {
+    margin-top: 8px;
+    font-size: 11px;
+    color: #BDB7D0;
+    text-align: center;
+  }
+
+  .voice-warn {
+    display: none;
+    background: #FFF4E6;
+    border: 1px solid #FFD8A8;
+    color: #D9480F;
+    font-size: 13px;
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-top: 10px;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <h1 id="appTitle">🎧 单词默写小助手</h1>
+    <p id="appSub">输入单词，听音默写，离线也能用</p>
+    <div class="mode-switch" id="modeSwitch">
+      <button type="button" id="modeBtnEn" data-mode="en" class="active">🔤 英语默写</button>
+      <button type="button" id="modeBtnZh" data-mode="zh">📖 语文默写</button>
+    </div>
+  </header>
+
+  <!-- ============ 设置页 ============ -->
+  <div id="setupView">
+    <div class="card">
+      <h2 id="inputCardTitle">📝 本次默写的单词</h2>
+      <textarea id="wordInput" placeholder="每行一条，英文 + 空格 + 中文释义（中文可省略），例如：&#10;apple 苹果&#10;look at 看一看&#10;you're=you are 你是&#10;What is your name? 你叫什么名字？&#10;&#10;单词、词组、句子都可以"></textarea>
+      <div class="hint"><span id="inputHintText">支持单词 / 词组 / 句子：英文在前，中文释义在后（可选）。</span>当前共 <b id="wordCount">0</b> 条。<span id="typeBadge" class="type-badge"></span></div>
+
+      <div class="list-tools">
+        <input id="listNameInput" placeholder="列表名，如：三年级上册U1">
+        <button class="chip" id="saveListBtn">💾 存为常用列表</button>
+      </div>
+      <div class="list-tools">
+        <button class="chip" id="exportBtn">📤 导出全部列表</button>
+        <button class="chip" id="importBtn">📥 导入列表</button>
+        <input type="file" id="importFile" accept=".json,application/json" style="display:none">
+      </div>
+      <div class="hint" style="margin-top:2px;">导出后可发到手机 / 其他浏览器，再用「导入列表」恢复。</div>
+      <input class="list-search" id="listSearch" placeholder="🔍 搜索列表名…" style="display:none" inputmode="search">
+      <div class="group-tabs" id="groupTabs"></div>
+      <div class="saved-lists" id="savedLists"></div>
+      <div class="voice-warn" id="voiceWarn">⚠️ 当前浏览器没找到英语发音引擎。在 Windows 上可到「设置 → 时间和语言 → 语音」添加英语语音包；手机端一般自带，无需处理。</div>
+    </div>
+
+    <div class="card">
+      <button class="collapse-head" id="settingsToggle">
+        <h2>⚙️ 播报设置</h2>
+        <span class="arrow">▼ 展开</span>
+      </button>
+      <div class="collapse-body" id="settingsBody">
+
+        <div class="setting-row">
+          <span class="label">播报内容</span>
+          <div class="seg" id="broadcastSeg">
+            <button data-v="en" class="active">🇬🇧 英文</button>
+            <button data-v="zh">🇨🇳 中文</button>
+          </div>
+        </div>
+        <div class="hint" id="broadcastHint" style="margin:-4px 0 4px;">英文：听发音写单词 ｜ 中文：听释义写单词（需单词带中文）</div>
+
+        <div class="setting-row">
+          <span class="label">播报顺序</span>
+          <div class="seg" id="orderSeg">
+            <button data-v="seq" class="active">📋 顺序</button>
+            <button data-v="random">🔀 随机</button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <span class="label">每个单词重复</span>
+          <div class="seg" id="repeatSeg">
+            <button data-v="1" class="active">1 遍</button>
+            <button data-v="2">2 遍</button>
+            <button data-v="3">3 遍</button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <span class="label">重复间隔</span>
+          <div class="stepper" id="repeatGapStepper">
+            <button class="step-btn" type="button" data-delta="-1">−</button>
+            <span class="step-val" id="repeatGapVal">2 秒</span>
+            <button class="step-btn" type="button" data-delta="1">+</button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <span class="label">单词间隔</span>
+          <div class="stepper" id="intervalStepper">
+            <button class="step-btn" type="button" data-delta="-1">−</button>
+            <span class="step-val" id="intervalVal">5 秒</span>
+            <button class="step-btn" type="button" data-delta="1">+</button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <span class="label">语速</span>
+          <div class="stepper" id="rateStepper">
+            <button class="step-btn" type="button" data-delta="-1">−</button>
+            <span class="step-val" id="rateVal">标准</span>
+            <button class="step-btn" type="button" data-delta="1">+</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <button class="big-btn" id="startBtn">▶ 开始默写<span class="btn-summary" id="startSummary"></span></button>
+  </div>
+
+  <!-- ============ 默写页 ============ -->
+  <div id="playView">
+    <div class="card">
+      <h2>🖊️ 默写进行中</h2>
+      <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+      <div class="progress-text" id="progressText">第 1 / 10 个</div>
+
+      <div class="word-stage">
+        <span class="speaking-badge" id="speakingBadge">🔊 正在播报…</span>
+        <div class="word-display word-hidden" id="wordDisplay">apple</div>
+        <button class="peek-btn" id="peekBtn">👀 按住看单词</button>
+      </div>
+
+      <div class="controls">
+        <button class="ctrl-btn" id="prevBtn"><span class="ico">⏮</span>上一个</button>
+        <button class="ctrl-btn" id="repeatBtn"><span class="ico">🔁</span>再读一遍</button>
+        <button class="ctrl-btn main" id="pauseBtn"><span class="ico">⏸</span>暂停</button>
+        <button class="ctrl-btn" id="nextBtn"><span class="ico">⏭</span>下一个</button>
+      </div>
+    </div>
+    <button class="back-btn" id="quitBtn">✕ 结束本次默写</button>
+  </div>
+
+  <!-- ============ 完成页 ============ -->
+  <div id="doneView">
+    <div class="card">
+      <div class="done-emoji">🎉</div>
+      <div class="done-title">全部默写完成！</div>
+      <div class="done-sub" id="doneSub"></div>
+
+      <div class="review">
+        <div class="review-head">
+          <span>📋 本次默写内容</span>
+          <span class="review-count" id="reviewCount"></span>
+        </div>
+        <ol class="review-list" id="reviewList"></ol>
+        <div class="review-tip">按实际播报顺序排列，可对照批改</div>
+      </div>
+
+      <button class="big-btn" id="homeBtn">✅ 结束默写</button>
+      <button class="second-btn" id="againBtn">🔄 再默写一次</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============ 同名列表冲突弹窗 ============ -->
+<div class="modal-mask" id="conflictModal">
+  <div class="modal-card">
+    <h3>列表名已存在</h3>
+    <p id="conflictMsg"></p>
+    <div class="modal-btns">
+      <button class="m-overwrite" id="conflictOverwrite">覆盖（以当前内容为准）</button>
+      <button class="m-merge" id="conflictMerge">合并（新词追加到旧列表）</button>
+      <button class="m-rename" id="conflictRename">改名（换个名字另存）</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------------- 状态 ----------------
+  var state = {
+    entries: [],        // 本次默写条目 [{en, zh}]
+    playOrder: [],      // 实际播放顺序（索引数组）
+    idx: 0,             // 当前播到 playOrder 的第几个
+    broadcast: 'en',    // en=报英文写英文 | zh=报中文写英文
+    order: 'seq',       // seq | random
+    repeat: 1,
+    repeatGap: 2,       // 遍与遍之间的间隔（秒）
+    interval: 5,        // 条与条之间的间隔（秒）
+    rate: 0.8,
+    paused: false,
+    playing: false,
+    timer: null,
+    spokenTimes: 0,     // 当前词已播完的遍数（用于暂停后继续）
+    resumeFn: null,     // 尚未发声时，按「继续」应回到哪个阶段
+    waitFn: null,       // 当前等待（遍间/词间）结束后要执行的动作
+    waitTotal: 0,       // 本次等待总时长（ms）
+    waitStart: 0,       // 本次等待开始的时间戳
+    waitRemain: 0,      // 暂停时剩余的等待时长（ms）
+    pauseKind: null,    // 暂停类型：'speech' 冻结语音 | 'wait' 等待中 | 'idle' 尚未发声
+  };
+
+  var synth = window.speechSynthesis;
+  var $ = function (id) { return document.getElementById(id); };
+  var views = { setup: $('setupView'), play: $('playView'), done: $('doneView') };
+
+  function show(name) {
+    views.setup.style.display = name === 'setup' ? 'block' : 'none';
+    views.play.style.display = name === 'play' ? 'block' : 'none';
+    views.done.style.display = name === 'done' ? 'block' : 'none';
+    window.scrollTo(0, 0);
+  }
+
+  // ---------------- 双模式：英语 / 语文默写 ----------------
+  // 两套数据（常用列表、类型设置、上次设置）用不同的 localStorage 键完全隔离；
+  // 词条结构统一为 {en, zh}：英语模式 en=英文、zh=中文释义；语文模式 en=词语、zh=提示语。
+  var TYPE_KEYWORDS = [
+    [/单词|word/i, 'word'],
+    [/词组|短语|phrase/i, 'phrase'],
+    [/句子|句型|sentence/i, 'sentence']
+  ];
+  var TYPE_KEYWORDS_ZH = [
+    [/词语|生字|词汇|词表/i, 'word'],
+    [/成语/i, 'phrase'],
+    [/古诗|诗词|造句/i, 'sentence']
+  ];
+
+  var MODES = {
+    en: {
+      key: 'en',
+      icon: '🎧',
+      title: '单词默写小助手',
+      sub: '输入单词，听音默写，离线也能用',
+      cardTitle: '📝 本次默写的单词',
+      inputHint: '支持单词 / 词组 / 句子：英文在前，中文释义在后（可选）。',
+      placeholder: "每行一条，英文 + 空格 + 中文释义（中文可省略），例如：\napple 苹果\nlook at 看一看\nyou're=you are 你是\nWhat is your name? 你叫什么名字？\n\n单词、词组、句子都可以",
+      listNamePh: '列表名，如：三年级上册U1',
+      peekLabel: '👀 按住看单词',
+      introDefault: '单词',
+      unitRe: /Unit\s*(\d+)/i,
+      typeSuffixRe: /--(单词|词组|句子)/,
+      typeOrder: { '单词': 1, '词组': 2, '句子': 3 },
+      typeKeywords: TYPE_KEYWORDS,
+      typeNames: { word: '单词', phrase: '词组', sentence: '句子' },
+      defaultBroadcast: 'en',
+      broadcastSegHTML: '<button type="button" data-v="en" class="active">🇬🇧 英文</button><button type="button" data-v="zh">🇨🇳 中文</button>',
+      broadcastHint: '英文：听发音写单词 ｜ 中文：听释义写单词（需单词带中文）',
+      lsKey: 'dictation_lists_v1',
+      typeSetKey: 'dictation_type_settings_v1',
+      settingsKey: 'dictation_settings_v1',
+      exportName: '单词默写列表备份.json',
+      startEmptyHint: '请先输入要默写的单词～',
+      doneSpeech: 'Great job! You finished all the words!',
+      doneSpeechLang: 'en',
+      warnNoSynth: '⚠️ 当前浏览器不支持语音合成，请用 Chrome / Edge / Safari 打开。',
+      warnNoVoice: '⚠️ 当前浏览器没找到英语发音引擎。在 Windows 上可到「设置 → 时间和语言 → 语音」添加英语语音包；手机端一般自带，无需处理。',
+      warnGoogle: '⚠️ 当前浏览器只有 Google 联网英语语音（国内网络环境下可能无声）。建议使用 Microsoft Edge，或在 Windows「设置 → 时间和语言 → 语音」中添加英语语音包后重试。'
+    },
+    zh: {
+      key: 'zh',
+      icon: '📖',
+      title: '语文词语默写',
+      sub: '输入词语，听音默写，离线也能用',
+      cardTitle: '📝 本次默写的词语',
+      inputHint: '一行一个词语（支持成语）；可用「=」带提示语，帮助区分同音字。',
+      placeholder: '每行一个词语，例如：\n葡萄\n观察\n拼命\n\n也可以带提示语（= 后面写例句）：\n拼命 = 他拼命地向前跑\n\n提示语会在词语后播出，帮孩子确定是哪个字',
+      listNamePh: '列表名，如：二年级上册第3课',
+      peekLabel: '👀 按住看词语',
+      introDefault: '词语',
+      unitRe: /第\s*(\d+)\s*课/,
+      typeSuffixRe: /--(词语|成语|句子)/,
+      typeOrder: { '词语': 1, '成语': 2, '句子': 3 },
+      typeKeywords: TYPE_KEYWORDS_ZH,
+      typeNames: { word: '词语', phrase: '成语', sentence: '句子' },
+      defaultBroadcast: 'zh',
+      broadcastSegHTML: '<button type="button" data-v="zh" class="active">只报词语</button><button type="button" data-v="zh_hint">词语＋提示语</button>',
+      broadcastHint: '只报词语 ｜ 词语后再播一句提示语（需词条带提示语）',
+      lsKey: 'dictation_lists_zh_v1',
+      typeSetKey: 'dictation_type_settings_zh_v1',
+      settingsKey: 'dictation_settings_zh_v1',
+      exportName: '语文词语默写列表备份.json',
+      startEmptyHint: '请先输入要默写的词语～',
+      doneSpeech: '真棒！全部默写完成！',
+      doneSpeechLang: 'zh',
+      warnNoSynth: '⚠️ 当前浏览器不支持语音合成，请用 Chrome / Edge / Safari 打开。',
+      warnNoVoice: '⚠️ 当前浏览器没找到中文发音引擎。在 Windows 上可到「设置 → 时间和语言 → 语音」添加中文语音包；手机端一般自带，无需处理。',
+      warnGoogle: ''
+    }
+  };
+  var appMode = 'en';
+  function cfg() { return MODES[appMode]; }
+
+  // ---------------- 语音（英语 + 中文，均为系统本地引擎，离线可用） ----------------
+  var enVoice = null, zhVoice = null;
+  var enVoiceCandidates = []; // 英文语音候选列表，按可用性排序
+  function isGoogleNetworkVoice(v) {
+    // Chrome 自带的 Google 联网语音（服务器国内不可达，选了会无声）
+    return /^Google/i.test(v.name);
+  }
+  function pickVoice() {
+    if (!synth) return;
+    var voices = synth.getVoices();
+    var en = voices.filter(function (v) { return /^en([-_]|$)/i.test(v.lang); });
+    var zh = voices.filter(function (v) { return /^zh([-_]|$)/i.test(v.lang); });
+    // 中文：优先本地语音
+    zhVoice = zh.filter(function (v) { return v.localService; })[0] || zh[0] || null;
+    // 英文候选排序：本地语音 > 非 Google 网络语音 > Google 网络语音（兜底）
+    enVoiceCandidates = en.slice().sort(function (a, b) {
+      function rank(v) {
+        if (v.localService && !isGoogleNetworkVoice(v)) return 0;
+        if (!isGoogleNetworkVoice(v)) return 1;
+        if (v.localService) return 2;
+        return 3; // Google 网络语音排最后
+      }
+      return rank(a) - rank(b);
+    });
+    enVoice = enVoiceCandidates[0] || null;
+    updateVoiceWarn();
+  }
+  if (synth) {
+    pickVoice();
+    synth.onvoiceschanged = pickVoice;
+  } else {
+    updateVoiceWarn();
+  }
+
+  // 语音引擎提示（按模式：英语模式关心英文引擎，语文模式关心中文引擎）
+  function updateVoiceWarn() {
+    var el = $('voiceWarn');
+    if (!el) return;
+    var c = cfg();
+    if (!synth) { el.textContent = c.warnNoSynth; el.style.display = 'block'; return; }
+    if (appMode === 'zh') {
+      if (!zhVoice) { el.textContent = c.warnNoVoice; el.style.display = 'block'; }
+      else el.style.display = 'none';
+      return;
+    }
+    if (!enVoice) { el.textContent = c.warnNoVoice; el.style.display = 'block'; }
+    else if (isGoogleNetworkVoice(enVoice)) { el.textContent = c.warnGoogle; el.style.display = 'block'; }
+    else el.style.display = 'none';
+  }
+
+  // 语音播报（带看门狗，防止英文语音卡住导致整个流程假死）
+  // 已知浏览器坑及对策：
+  //  1. cancel() 后立刻 speak() 有竞态，utterance 可能永不开始 → 延迟 50ms 再播
+  //  2. Chrome 偶发把合成器置为 paused → 看门狗里持续 resume()
+  //  3. 网络语音（如 Google US English）离线时会挂起、不发声也不触发 onend
+  //     → 检测到"一直未开始"就换系统默认语音重试一次，再不行跳过继续流程
+  //  4. 快速点「下一个/上一个/重读」时，cancel() 会异步触发旧语音的结束/错误回调，
+  //     旧的重试逻辑会换候选语音把旧词再播一遍（男女声重叠）→ 用"世代编号"作废旧播报
+  var speakEpoch = 0;
+  // 当前正在发声的那一条（用于「真暂停 / 续播」）
+  var currentSpeech = null;
+
+  // 打断当前播报：作废旧语音的全部回调/重试/看门狗，再取消发声
+  function stopSpeech() {
+    speakEpoch++;
+    clearTimer();
+    state.waitFn = null;
+    state.waitRemain = 0;
+    currentSpeech = null;
+    if (synth) synth.cancel();
+    $('speakingBadge').classList.remove('on');
+  }
+
+  // 统一的等待入口：记录总时长与开始时间，暂停时可算出"还剩多久"
+  function startWait(ms, fn) {
+    clearTimer();
+    state.waitFn = fn;
+    state.waitTotal = ms;
+    state.waitStart = Date.now();
+    state.waitRemain = 0;
+    state.timer = setTimeout(function () {
+      state.timer = null;
+      var f = state.waitFn;
+      state.waitFn = null;
+      if (!state.playing || state.paused) return;
+      if (f) f();
+    }, ms);
+  }
+
+  // 暂停当前等待，记下剩余时长（恢复后接着走，而不是从头计时）
+  function freezeWait() {
+    if (!state.timer) return false;
+    var elapsed = Date.now() - state.waitStart;
+    state.waitRemain = Math.max(0, state.waitTotal - elapsed);
+    clearTimeout(state.timer);
+    state.timer = null;
+    return true;
+  }
+
+  function speak(text, lang, onend) {
+    if (!synth) { if (onend) onend(); return; }
+    var myEpoch = speakEpoch;
+    function isStale() { return myEpoch !== speakEpoch; }
+    var langTag = lang === 'zh' ? 'zh-CN' : 'en-US';
+    var rate = lang === 'zh' ? Math.min(1, state.rate + 0.15) : state.rate;
+    var finished = false;
+    var watchdog = null;
+    var myHandle = null;
+
+    // 英文：按候选列表逐个尝试（跳过已知会无声的 Google 网络语音）；
+    // 中文：用选定的中文语音，失败则换默认语音
+    var voiceQueue = lang === 'en'
+      ? enVoiceCandidates.slice()
+      : (zhVoice ? [zhVoice] : []);
+    voiceQueue.push(null); // 最后兜底：系统默认语音
+
+    function finish() {
+      if (finished) return;
+      finished = true;
+      if (currentSpeech === myHandle) currentSpeech = null;
+      if (watchdog) { clearInterval(watchdog); watchdog = null; }
+      // 已被打断的播报：静默退出，不触发 onend 继续旧流程，也不碰徽标（新播报在用）
+      if (isStale()) return;
+      $('speakingBadge').classList.remove('on');
+      if (onend) onend();
+    }
+
+    function attemptNext() {
+      // 被打断后 cancel() 触发的 onerror 会走到这里：直接废弃，绝不能再换语音重播旧词
+      if (isStale()) { finished = true; return; }
+      var useVoice = voiceQueue.shift();
+      if (useVoice === undefined) { finish(); return; } // 所有候选都失败
+
+      synth.cancel();
+      var u = new SpeechSynthesisUtterance(text);
+      if (useVoice) {
+        u.voice = useVoice;
+        u.lang = useVoice.lang;
+      } else {
+        u.lang = langTag;
+      }
+      u.rate = rate;
+      u.pitch = 1.1;
+      u.onend = finish;
+      u.onerror = attemptNext; // 该语音出错 → 换下一个候选
+      $('speakingBadge').classList.add('on');
+      setTimeout(function () {
+        if (!finished && !isStale()) synth.speak(u);
+      }, 50);
+
+      var elapsed = 0, started = false;
+
+      // 对外暴露这一条播报的控制句柄，供暂停按钮做「冻结/续播」
+      myHandle = {
+        active: function () { return !finished && !isStale(); },
+        started: function () { return started; },
+        // 合成器是否正在发声/排队（比 started 更实时，避免刚开口的 150ms 内被误判为"没开始"）
+        isSpeaking: function () { return !!(synth.speaking || synth.pending); },
+        pause: function () { try { if (synth.speaking && !synth.paused) synth.pause(); } catch (e) {} },
+        resume: function () { try { if (synth.paused) synth.resume(); } catch (e) {} },
+        isPaused: function () { return !!synth.paused; }
+      };
+      currentSpeech = myHandle;
+
+      var graceMs = 1200; // 启动宽限：超过仍未开始视为该语音不可用
+      var maxMs = Math.max(3000, text.length * 700 / rate) + 2500; // 绝对上限
+      watchdog = setInterval(function () {
+        if (finished) { clearInterval(watchdog); return; }
+        // 用户主动暂停期间：冻结计时，也绝不自动 resume（否则会把暂停顶掉）
+        if (state.paused) return;
+        // 已过期：只停看门狗，绝不能 cancel（会误杀新播报）
+        if (isStale()) { clearInterval(watchdog); watchdog = null; finished = true; return; }
+        elapsed += 150;
+        if (synth.paused) synth.resume();
+        if (synth.speaking) started = true;
+        if (started && useVoice && lang === 'en') {
+          // 这个语音能出声：提升为首选，后续词条直接用，不再逐个轮询
+          var vi = enVoiceCandidates.indexOf(useVoice);
+          if (vi > 0) {
+            enVoiceCandidates.splice(vi, 1);
+            enVoiceCandidates.unshift(useVoice);
+            enVoice = useVoice;
+          }
+        }
+        var active = synth.speaking || synth.pending;
+        if (started && !active) {
+          // 播完了但 onend 没触发（部分浏览器丢回调）
+          clearInterval(watchdog);
+          finish();
+        } else if (!started && elapsed > graceMs) {
+          // 一直没开始（典型：Google 网络语音无声挂起）→ 换下一个候选语音
+          clearInterval(watchdog);
+          synth.cancel();
+          attemptNext();
+        } else if (elapsed > maxMs) {
+          // 播到一半卡死：强制结束
+          clearInterval(watchdog);
+          synth.cancel();
+          finish();
+        }
+      }, 150);
+    }
+
+    attemptNext();
+  }
+
+  // ---------------- 内容解析（单词 / 词组 / 句子 + 可选中文释义） ----------------
+  // 规则：每行一条。英文部分允许空格、撇号、连字符、等号、数字、常见标点；
+  // 从第一个中文字符起视为中文释义。
+  // 纯英文行：顿号/分号分隔多条；逗号仅当分隔后每段都是单个单词时才拆
+  // （保护 "Hello, how are you" 这类句子）；空格不拆（词组、句子保留完整）。
+  var EN_CHARS = /^[A-Za-z0-9][A-Za-z0-9\s'’\-=.,?!&()]*/;
+  var SINGLE_WORD = /^[A-Za-z][A-Za-z'’\-]*$/;
+
+  function parseEntriesEn(text) {
+    var entries = [];
+    text.split(/\n+/).forEach(function (line) {
+      line = line.trim();
+      if (!line) return;
+
+      var zhStart = line.search(/[\u4e00-\u9fa5]/);
+      if (zhStart > 0) {
+        // 含中文：切开英文 / 中文
+        var en = line.slice(0, zhStart).replace(/[\s,，、;；\-—|]+$/, '').trim();
+        var zh = line.slice(zhStart).trim();
+        if (en && EN_CHARS.test(en)) entries.push({ en: en, zh: zh });
+      } else if (zhStart === 0) {
+        return; // 纯中文行，忽略
+      } else {
+        // 纯英文行
+        var semi = line.split(/[、;；]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+        semi.forEach(function (seg) {
+          var byComma = seg.split(/[,，]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+          if (byComma.length > 1 && byComma.every(function (p) { return SINGLE_WORD.test(p); })) {
+            byComma.forEach(function (p) { entries.push({ en: p, zh: '' }); });
+          } else if (EN_CHARS.test(seg)) {
+            entries.push({ en: seg, zh: '' });
+          }
+        });
+      }
+    });
+    return entries;
+  }
+
+  // 语文模式：一行一个词语；「词语 = 提示语」可选；顿号/逗号/分号可分隔多个词语
+  function parseEntriesZh(text) {
+    var entries = [];
+    text.split(/\n+/).forEach(function (line) {
+      line = line.trim().replace(/＝/g, '=');
+      if (!line) return;
+      var eq = line.indexOf('=');
+      if (eq >= 0) {
+        var word = line.slice(0, eq).trim();
+        var hint = line.slice(eq + 1).trim();
+        if (word && /[\u4e00-\u9fa5]/.test(word)) entries.push({ en: word, zh: hint });
+      } else {
+        line.split(/[、，,；;]+/).forEach(function (seg) {
+          seg = seg.trim();
+          if (seg && /[\u4e00-\u9fa5]/.test(seg)) entries.push({ en: seg, zh: '' });
+        });
+      }
+    });
+    return entries;
+  }
+
+  function parseEntries(text) {
+    return appMode === 'zh' ? parseEntriesZh(text) : parseEntriesEn(text);
+  }
+
+  function entriesToText(entries) {
+    return entries.map(function (e) {
+      if (typeof e === 'string') return e; // 兼容旧版保存的列表
+      if (appMode === 'zh') return e.en + (e.zh ? ' = ' + e.zh : '');
+      return e.en + (e.zh ? ' ' + e.zh : '');
+    }).join('\n');
+  }
+
+  // 优先从列表名判断类型（如「三年级上册Unit3--单词」），标题里没有再按内容判断
+  function typeFromName(name) {
+    if (!name) return '';
+    var kws = cfg().typeKeywords;
+    for (var i = 0; i < kws.length; i++) {
+      if (kws[i][0].test(name)) return kws[i][1];
+    }
+    return '';
+  }
+
+  function refreshCount() {
+    var entries = parseEntries($('wordInput').value);
+    $('wordCount').textContent = entries.length;
+    // 内容类型变化时：该类型有历史设置就自动套用，没有则把当前设置记为它的初始值
+    var newType = typeFromName(currentListName) || detectContentType(entries);
+    if (newType !== state.contentType) {
+      state.contentType = newType;
+      if (newType) {
+        var saved = loadTypeSettings()[newType];
+        if (saved) {
+          applySettings(saved);
+          updateTypeBadge('applied');
+        } else {
+          persistTypeSettings();
+          updateTypeBadge('learned');
+        }
+      } else {
+        updateTypeBadge();
+      }
+    }
+  }
+  $('wordInput').addEventListener('input', function () {
+    currentListName = ''; // 手动修改内容后，不再关联原列表名
+    refreshCount();
+  });
+
+  // ---------------- 设置控件 ----------------
+  function bindSeg(id, cb) {
+    var seg = $(id);
+    seg.addEventListener('click', function (e) {
+      var btn = e.target.closest('button');
+      if (!btn) return;
+      seg.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      cb(btn.dataset.v);
+      persistTypeSettings();
+      updateTypeBadge('learned');
+    });
+  }
+  bindSeg('broadcastSeg', function (v) { state.broadcast = v; });
+  bindSeg('orderSeg', function (v) { state.order = v; });
+  bindSeg('repeatSeg', function (v) { state.repeat = parseInt(v, 10); });
+
+  // ---------------- 时间 / 语速步进器（− / +） ----------------
+  // 语速档位：0.5~1.2，一档一名（不重复），避免"点了没切换"的错觉。
+  //   0.5=很慢  0.6=较慢  0.7=偏慢  0.8=标准  0.9=稍快  1.0=较快  1.1=快  1.2=很快
+  //   0.8 为默认；1.2 已足够快，故上限设为 1.2。
+  var RATE_MIN = 0.5, RATE_MAX = 1.2;
+  var rateNames = {
+    '0.5': '很慢', '0.6': '较慢', '0.7': '偏慢', '0.8': '标准',
+    '0.9': '稍快', '1': '较快', '1.1': '快', '1.2': '很快'
+  };
+  // 把任意历史/导入的语速值收敛到合法档位（旧数据 1.3~1.5 会落到 1.2）
+  function clampRate(v) {
+    v = parseFloat(v);
+    if (!isFinite(v)) return 0.8;
+    v = Math.round(v * 10) / 10;
+    if (v < RATE_MIN) v = RATE_MIN;
+    if (v > RATE_MAX) v = RATE_MAX;
+    return v;
+  }
+  var STEPPER_CFG = {
+    repeatGap: { min: 1, max: 10, step: 1, el: 'repeatGapVal', box: 'repeatGapStepper', fmt: function (v) { return v + ' 秒'; } },
+    interval: { min: 3, max: 60, step: 1, el: 'intervalVal', box: 'intervalStepper', fmt: function (v) { return v + ' 秒'; } },
+    rate: { min: RATE_MIN, max: RATE_MAX, step: 0.1, el: 'rateVal', box: 'rateStepper', fmt: function (v) { return rateNames[String(v)] || (parseFloat(v).toFixed(1) + 'x'); } }
+  };
+  function renderStepper(key) {
+    var cfg = STEPPER_CFG[key];
+    var v = state[key];
+    var el = $(cfg.el);
+    el.textContent = cfg.fmt(v);
+    // 用整数比例存储，彻底规避 0.1+0.2=0.30000000000000004 的浮点问题
+    el.dataset.v = (Math.round(v * 100) / 100).toString();
+    var box = $(cfg.box);
+    if (box) {
+      box.querySelector('[data-delta="-1"]').disabled = v <= cfg.min + 1e-9;
+      box.querySelector('[data-delta="1"]').disabled = v >= cfg.max - 1e-9;
+    }
+  }
+  function stepValue(key, delta) {
+    var cfg = STEPPER_CFG[key];
+    // 全部用整数运算：rate 的 step=0.1 先乘 10 变 1，最后再除回
+    var mult = cfg.step < 1 ? 10 : 1;
+    var cur = Math.round(state[key] * mult);
+    var stepInt = Math.round(cfg.step * mult);
+    var v = (cur + delta * stepInt) / mult;
+    v = Math.round(v * 100) / 100; // 再兜底一次
+    if (v < cfg.min) v = cfg.min;
+    if (v > cfg.max) v = cfg.max;
+    state[key] = v;
+    renderStepper(key);
+    persistTypeSettings();
+    updateTypeBadge('learned');
+    refreshSummary();
+  }
+  Object.keys(STEPPER_CFG).forEach(function (key) {
+    var cfg = STEPPER_CFG[key];
+    var box = $(cfg.box);
+    if (!box) return;
+    box.querySelectorAll('.step-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () { stepValue(key, parseInt(btn.dataset.delta, 10)); });
+    });
+    renderStepper(key);
+  });
+
+  // ---------------- 设置面板折叠 + 开始按钮摘要 ----------------
+  $('settingsToggle').addEventListener('click', function () {
+    var body = $('settingsBody');
+    var open = body.classList.toggle('open');
+    this.classList.toggle('open', open);
+    this.querySelector('.arrow').textContent = open ? '▲ 收起' : '▼ 展开';
+  });
+
+  function refreshSummary() {
+    var b;
+    if (appMode === 'zh') b = state.broadcast === 'zh_hint' ? '词语+提示' : '报词语';
+    else b = state.broadcast === 'zh' ? '报中文' : '报英文';
+    var o = state.order === 'random' ? '随机' : '顺序';
+    $('startSummary').textContent =
+      b + ' · ' + o + ' · 重复' + state.repeat + '遍(隔' + state.repeatGap + '秒) · 条间' + state.interval + '秒';
+  }
+  ['broadcastSeg', 'orderSeg', 'repeatSeg'].forEach(function (id) {
+    $(id).addEventListener('click', refreshSummary);
+  });
+
+  // ---------------- 内容类型识别 + 按类型记忆播报设置 ----------------
+  // 单词：单个词；词组：2-4 个词；句子：含 .!? 标点或 5 个词以上
+  // 每类内容独立记忆一整套播报设置（按模式分开存储），
+  // 切换同类型列表时自动套用，不用重新设置
+  state.contentType = ''; // '' | word | phrase | sentence
+
+  function loadTypeSettings() {
+    try { return JSON.parse(localStorage.getItem(cfg().typeSetKey)) || {}; } catch (e) { return {}; }
+  }
+
+  function classifyEntry(en) {
+    if (/[.!?。！？]/.test(en)) return 'sentence';
+    var n = en.trim().split(/\s+/).length;
+    if (n === 1) return 'word';
+    if (n <= 4) return 'phrase';
+    return 'sentence';
+  }
+
+  function detectContentType(entries) {
+    if (!entries.length) return '';
+    var counts = { word: 0, phrase: 0, sentence: 0 };
+    entries.forEach(function (e) { counts[classifyEntry(e.en)]++; });
+    // 多数决；平局偏向更复杂的类型（句子>词组>单词），长内容往往需要更长间隔
+    if (counts.sentence >= counts.phrase && counts.sentence >= counts.word) return 'sentence';
+    if (counts.phrase >= counts.word) return 'phrase';
+    return 'word';
+  }
+
+  function snapshotSettings() {
+    return {
+      broadcast: state.broadcast, order: state.order, repeat: state.repeat,
+      repeatGap: state.repeatGap, interval: state.interval, rate: state.rate
+    };
+  }
+  // 手动调整设置后调用：把当前设置保存到当前类型名下
+  function persistTypeSettings() {
+    if (!state.contentType) return;
+    var all = loadTypeSettings();
+    all[state.contentType] = snapshotSettings();
+    try { localStorage.setItem(cfg().typeSetKey, JSON.stringify(all)); } catch (e) {}
+  }
+  // 把一组设置应用到 state 和面板控件（不会触发 input 事件，无循环）
+  function applySettings(s) {
+    if (!s) return;
+    state.broadcast = s.broadcast || cfg().defaultBroadcast;
+    state.order = s.order || 'seq';
+    state.repeat = s.repeat || 1;
+    state.repeatGap = s.repeatGap || 2;
+    state.interval = s.interval || 5;
+    state.rate = clampRate(s.rate || 0.8);
+    renderStepper('repeatGap');
+    renderStepper('interval');
+    renderStepper('rate');
+    document.querySelectorAll('#broadcastSeg button').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.v === state.broadcast);
+    });
+    document.querySelectorAll('#orderSeg button').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.v === state.order);
+    });
+    document.querySelectorAll('#repeatSeg button').forEach(function (b) {
+      b.classList.toggle('active', parseInt(b.dataset.v, 10) === state.repeat);
+    });
+    refreshSummary();
+  }
+
+  // 类型徽标：applied=已套用历史设置；learned=已记录当前设置
+  function updateTypeBadge(mode) {
+    var badge = $('typeBadge');
+    if (!badge) return;
+    if (!state.contentType) {
+      badge.textContent = '';
+      badge.classList.remove('show');
+      return;
+    }
+    var t = cfg().typeNames[state.contentType];
+    badge.textContent = '识别为【' + t + '】' +
+      (mode === 'applied' ? '，已套用上次设置' : mode === 'learned' ? '，设置已记住' : '');
+    badge.classList.add('show');
+  }
+
+  // ---------------- 常用列表（localStorage，按模式隔离） ----------------
+  var MAX_INLINE_CHIPS = 6; // 超过这个数量自动切换为下拉框模式
+  var listState = {
+    group: '',      // 当前选中的分组（'' = 全部）
+    search: ''      // 搜索关键词
+  };
+
+  function loadLists() {
+    try { return JSON.parse(localStorage.getItem(cfg().lsKey)) || {}; } catch (e) { return {}; }
+  }
+  // 写入失败（配额已满 / 隐私模式禁用存储）不能静默：提示一次并返回 false，由调用方中止后续动作
+  var storageWarned = false;
+  function saveLists(o) {
+    try {
+      localStorage.setItem(cfg().lsKey, JSON.stringify(o));
+      return true;
+    } catch (e) {
+      if (!storageWarned) {
+        storageWarned = true;
+        alert('保存失败：浏览器本地存储空间已满或不可用。\n建议先点「导出」备份，再删除一些不常用的列表后重试。');
+      }
+      return false;
+    }
+  }
+
+  // 从列表名提取分组（年级+册别），如「三年级上册Unit3--单词」→「三年级上册」
+  function extractGroup(name) {
+    // 匹配：X年级上册 / X年级下册 / X年级上 / X年级下
+    var m = name.match(/^([一二三四五六七八九]?\d*年级(?:上册|下册|上|下))/);
+    return m ? m[1] : '未分组';
+  }
+
+  // 排序键：年级 > 册别(上<下) > 单元编号 > 类型
+  var CN_NUM = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 };
+  function listSortKey(name) {
+    var c = cfg();
+    var g = extractGroup(name);
+    var grade = 99, term = 0;
+    if (g !== '未分组') {
+      var gm = g.match(/^([一二三四五六七八九]|\d+)?年级(.+)$/);
+      if (gm) grade = gm[1] ? (CN_NUM[gm[1]] || parseInt(gm[1], 10) || 99) : 99;
+      term = /下/.test(g) ? 1 : 0;
+    }
+    var unit = parseInt((name.match(c.unitRe) || [])[1] || '9999', 10);
+    var type = c.typeOrder[(name.match(c.typeSuffixRe) || [])[1]] || 9;
+    return { grade: grade, term: term, unit: unit, type: type, raw: name };
+  }
+  function compareListNames(a, b) {
+    var ka = listSortKey(a), kb = listSortKey(b);
+    if (ka.grade !== kb.grade) return ka.grade - kb.grade;
+    if (ka.term !== kb.term) return ka.term - kb.term;
+    if (ka.unit !== kb.unit) return ka.unit - kb.unit;
+    if (ka.type !== kb.type) return ka.type - kb.type;
+    return ka.raw < kb.raw ? -1 : (ka.raw > kb.raw ? 1 : 0);
+  }
+
+  // 载入列表内容到输入框
+  var currentListName = ''; // 当前输入框内容来源的列表名（用于开场播报）
+  function loadListIntoInput(name) {
+    var lists = loadLists();
+    if (!lists[name]) return;
+    $('wordInput').value = entriesToText(lists[name]);
+    currentListName = name;
+    refreshCount();
+  }
+  // 编辑：载入内容 + 回填列表名，改完后点「存为常用列表」即覆盖保存
+  function editList(name) {
+    loadListIntoInput(name);
+    $('listNameInput').value = name;
+    $('wordInput').focus();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function deleteList(name) {
+    if (!confirm('删除列表「' + name + '」？')) return;
+    var l = loadLists();
+    delete l[name];
+    saveLists(l);
+    renderLists();
+  }
+
+  // 渲染分组标签 + 搜索框 + 列表
+  function renderLists() {
+    var lists = loadLists();
+    var names = Object.keys(lists);
+    // 自动排序：年级 > 册别 > Unit编号 > 类型（单词→词组→句子）
+    names.sort(compareListNames);
+    var box = $('savedLists');
+    var tabsBox = $('groupTabs');
+    var searchBox = $('listSearch');
+    box.innerHTML = '';
+    tabsBox.innerHTML = '';
+
+    // 无列表时隐藏搜索和分组
+    if (!names.length) {
+      searchBox.style.display = 'none';
+      tabsBox.style.display = 'none';
+      return;
+    }
+
+    // 显示搜索框
+    searchBox.style.display = 'block';
+    searchBox.value = listState.search;
+
+    // 计算分组
+    var groups = {};
+    names.forEach(function (name) {
+      var g = extractGroup(name);
+      if (!groups[g]) groups[g] = 0;
+      groups[g]++;
+    });
+    var groupNames = Object.keys(groups).sort();
+
+    // 当前选中的分组已不存在（如被删空）→ 自动回退到「全部」
+    if (listState.group !== '' && groupNames.indexOf(listState.group) === -1) {
+      listState.group = '';
+    }
+
+    // 渲染分组标签
+    tabsBox.style.display = 'block';
+    var allTab = document.createElement('button');
+    allTab.className = 'group-tab' + (listState.group === '' ? ' active' : '');
+    allTab.textContent = '全部';
+    allTab.addEventListener('click', function () {
+      listState.group = '';
+      renderLists();
+    });
+    tabsBox.appendChild(allTab);
+
+    groupNames.forEach(function (g) {
+      var tab = document.createElement('button');
+      tab.className = 'group-tab' + (listState.group === g ? ' active' : '');
+      tab.textContent = g + ' (' + groups[g] + ')';
+      tab.addEventListener('click', function () {
+        listState.group = g;
+        renderLists();
+      });
+      tabsBox.appendChild(tab);
+    });
+
+    // 过滤列表
+    var filtered = names.filter(function (name) {
+      var matchGroup = listState.group === '' || extractGroup(name) === listState.group;
+      var matchSearch = listState.search === '' || name.toLowerCase().indexOf(listState.search.toLowerCase()) !== -1;
+      return matchGroup && matchSearch;
+    });
+
+    if (!filtered.length) {
+      box.innerHTML = '<div style="text-align:center;color:#bbb;padding:12px;">没有匹配的列表</div>';
+      return;
+    }
+
+    // 渲染列表（chips 或 dropdown）
+    if (filtered.length <= MAX_INLINE_CHIPS) {
+      filtered.forEach(function (name) {
+        var chip = document.createElement('button');
+        chip.className = 'chip';
+        var label = document.createElement('span');
+        label.textContent = '📚 ' + name + '（' + lists[name].length + '条）';
+        var edit = document.createElement('span');
+        edit.className = 'edit';
+        edit.textContent = '✏️';
+        edit.title = '编辑';
+        var del = document.createElement('span');
+        del.className = 'del';
+        del.textContent = '✕';
+        del.title = '删除';
+        label.addEventListener('click', function () { loadListIntoInput(name); });
+        edit.addEventListener('click', function (e) { e.stopPropagation(); editList(name); });
+        del.addEventListener('click', function (e) { e.stopPropagation(); deleteList(name); });
+        chip.appendChild(label);
+        chip.appendChild(edit);
+        chip.appendChild(del);
+        box.appendChild(chip);
+      });
+    } else {
+      // —— 下拉框模式（列表较多时自动启用） ——
+      var wrap = document.createElement('div');
+      wrap.className = 'list-dropdown';
+
+      var sel = document.createElement('select');
+      var ph = document.createElement('option');
+      ph.value = '';
+      ph.textContent = '📚 选择常用列表（共 ' + names.length + ' 个）…';
+      sel.appendChild(ph);
+      filtered.forEach(function (name) {
+        var opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name + '（' + lists[name].length + '条）';
+        sel.appendChild(opt);
+      });
+      // 选中即载入，保留选择以便编辑/删除
+      sel.addEventListener('change', function () {
+        if (this.value) loadListIntoInput(this.value);
+      });
+
+      var editBtn = document.createElement('button');
+      editBtn.className = 'mini-btn';
+      editBtn.textContent = '✏️';
+      editBtn.title = '编辑选中列表';
+      editBtn.addEventListener('click', function () {
+        if (!sel.value) { alert('先在下拉框里选一个列表～'); return; }
+        editList(sel.value);
+      });
+
+      var delBtn = document.createElement('button');
+      delBtn.className = 'mini-btn';
+      delBtn.textContent = '✕';
+      delBtn.title = '删除选中列表';
+      delBtn.addEventListener('click', function () {
+        if (!sel.value) { alert('先在下拉框里选一个列表～'); return; }
+        deleteList(sel.value);
+      });
+
+      var hint = document.createElement('div');
+      hint.className = 'list-dropdown-hint';
+      hint.textContent = '列表较多，已切换为下拉框：选中即载入，✏️ 编辑 / ✕ 删除当前选中项';
+
+      wrap.appendChild(sel);
+      wrap.appendChild(editBtn);
+      wrap.appendChild(delBtn);
+      box.appendChild(wrap);
+      box.appendChild(hint);
+    }
+  }
+  renderLists();
+
+  // 搜索框事件
+  $('listSearch').addEventListener('input', function () {
+    listState.search = this.value;
+    renderLists();
+  });
+  // iPad/iOS：按回车或点外部时收起键盘
+  $('listSearch').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === 'Search') { this.blur(); }
+  });
+  document.addEventListener('click', function (e) {
+    if (e.target !== $('listSearch') && !$('listSearch').contains(e.target)) {
+      $('listSearch').blur();
+    }
+  });
+
+  // ---------------- 列表导入 / 导出（跨浏览器、跨设备迁移） ----------------
+  var EXPORT_VERSION = 1;
+
+  $('exportBtn').addEventListener('click', function () {
+    var lists = loadLists();
+    var names = Object.keys(lists);
+    if (!names.length) { alert('还没有保存任何列表，先存一个再导出～'); return; }
+    var payload = {
+      app: 'word-dictation',
+      version: EXPORT_VERSION,
+      exportedAt: new Date().toISOString(),
+      lists: lists
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = cfg().exportName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    alert('已导出 ' + names.length + ' 个列表：\n' + names.join('、') +
+      '\n\n把这个 .json 文件发到手机/其他设备后，用那边的「导入列表」恢复即可。');
+  });
+
+  $('importBtn').addEventListener('click', function () {
+    $('importFile').click();
+  });
+
+  $('importFile').addEventListener('change', function () {
+    var file = this.files && this.files[0];
+    this.value = ''; // 允许重复导入同一文件
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var data = JSON.parse(reader.result);
+        // 兼容两种格式：完整备份文件 {lists:{...}} 或纯列表对象 {...}
+        var imported = (data && data.lists) ? data.lists : data;
+        if (!imported || typeof imported !== 'object' || Array.isArray(imported)) {
+          throw new Error('bad format');
+        }
+        var current = loadLists();
+        // 同名列表：由用户决定合并还是跳过（与手动保存时的冲突提示保持一致，不再静默合并）
+        var dupNames = Object.keys(imported).filter(function (n) {
+          return current[n] && Array.isArray(imported[n]) && imported[n].length;
+        });
+        var doMerge = true;
+        if (dupNames.length) {
+          doMerge = confirm('检测到 ' + dupNames.length + ' 个同名列表：\n' +
+            dupNames.slice(0, 6).join('、') + (dupNames.length > 6 ? ' 等' : '') +
+            '\n\n点「确定」＝合并（保留原有词条，追加新词条）\n点「取消」＝跳过这些同名列表');
+        }
+        var added = 0, merged = 0, skipped = 0;
+        Object.keys(imported).forEach(function (name) {
+          var clean = normalizeEntries(imported[name]);
+          if (!clean.length) { skipped++; return; }
+          if (current[name]) {
+            if (!doMerge) { skipped++; return; }
+            current[name] = mergeEntries(current[name], clean);
+            merged++;
+          } else {
+            current[name] = clean;
+            added++;
+          }
+        });
+        if (!saveLists(current)) return; // 存储失败：saveLists 已提示，不覆盖界面状态
+        renderLists();
+        alert('导入完成！\n新增列表：' + added + ' 个\n同名合并：' + merged + ' 个' +
+          (skipped ? '\n跳过（无效或已选择跳过）：' + skipped + ' 个' : ''));
+      } catch (e) {
+        alert('导入失败：文件格式不正确。\n请确认是用「导出全部列表」生成的 .json 备份文件。');
+      }
+    };
+    reader.onerror = function () { alert('读取文件失败，请重试。'); };
+    reader.readAsText(file);
+  });
+
+  // ---------------- 同名冲突：覆盖 / 合并 / 改名 ----------------
+  var pendingSave = null; // { name, entries }
+
+  // 统一条目结构：兼容旧版字符串数组、缺失字段与非数组，过滤空条目
+  function normalizeEntries(list) {
+    if (!Array.isArray(list)) return [];
+    return list.map(function (e) {
+      if (typeof e === 'string') return { en: e.trim(), zh: '' };
+      if (e && typeof e.en === 'string') return { en: e.en.trim(), zh: e.zh || '' };
+      return null;
+    }).filter(function (e) { return e && e.en; });
+  }
+
+  // 合并：旧词保留顺序，新词追加；英文相同（忽略大小写）的条目去重，
+  // 释义以旧列表为准，旧条目无释义时补新释义
+  function mergeEntries(oldEntries, newEntries) {
+    // 旧数据可能是字符串数组（早期版本），必须先规范化，否则 e.en 为 undefined 会抛错
+    var result = normalizeEntries(oldEntries);
+    var seen = {};
+    result.forEach(function (e, i) { seen[e.en.toLowerCase()] = i; });
+    normalizeEntries(newEntries).forEach(function (e) {
+      var k = e.en.toLowerCase();
+      if (seen[k] !== undefined) {
+        if (!result[seen[k]].zh && e.zh) result[seen[k]].zh = e.zh;
+      } else {
+        seen[k] = result.length;
+        result.push({ en: e.en, zh: e.zh });
+      }
+    });
+    return result;
+  }
+
+  function showConflictModal(name, entries) {
+    var lists = loadLists();
+    $('conflictMsg').textContent = '已有列表「' + name + '」（原有 ' + (lists[name] || []).length +
+      ' 条，当前输入 ' + entries.length + ' 条）。你想怎么处理？';
+    pendingSave = { name: name, entries: entries };
+    $('conflictModal').classList.add('open');
+  }
+  function closeConflictModal() {
+    $('conflictModal').classList.remove('open');
+    pendingSave = null;
+  }
+  function doSave(name, entries) {
+    var lists = loadLists();
+    lists[name] = entries;
+    if (!saveLists(lists)) return false; // 存储失败：不更新界面状态，避免误以为已保存
+    currentListName = name;
+    $('listNameInput').value = '';
+    // 保存后自动切到新列表所在分组并清空搜索，确保能看到刚存的列表
+    listState.group = extractGroup(name);
+    listState.search = '';
+    renderLists();
+    return true;
+  }
+
+  $('conflictOverwrite').addEventListener('click', function () {
+    if (!pendingSave) return;
+    doSave(pendingSave.name, pendingSave.entries);
+    closeConflictModal();
+  });
+  $('conflictMerge').addEventListener('click', function () {
+    if (!pendingSave) return;
+    var lists = loadLists();
+    doSave(pendingSave.name, mergeEntries(lists[pendingSave.name] || [], pendingSave.entries));
+    closeConflictModal();
+  });
+  $('conflictRename').addEventListener('click', function () {
+    var name = pendingSave ? pendingSave.name : '';
+    closeConflictModal();
+    var inp = $('listNameInput');
+    inp.value = name;
+    inp.focus();
+    inp.select();
+  });
+  // 点遮罩取消
+  $('conflictModal').addEventListener('click', function (e) {
+    if (e.target === this) closeConflictModal();
+  });
+
+  $('saveListBtn').addEventListener('click', function () {
+    var name = $('listNameInput').value.trim();
+    var entries = parseEntries($('wordInput').value);
+    if (!name) { alert('先给列表起个名字吧～'); return; }
+    if (!entries.length) { alert('单词框里还没有内容'); return; }
+    var lists = loadLists();
+    if (lists[name]) { showConflictModal(name, entries); return; }
+    doSave(name, entries);
+  });
+
+  // ---------------- 播放控制 ----------------
+  function shuffle(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+    return arr;
+  }
+
+  function currentEntry() {
+    return state.entries[state.playOrder[state.idx]] || { en: '', zh: '' };
+  }
+
+  // 本次要播报的文本：
+  //  英语模式：报中文读释义，报英文读词条（把 "=" 换成停顿，避免读成 "equals"）
+  //  语文模式：读词语本身（"=" 换成中文逗号停顿）
+  function broadcastText() {
+    var e = currentEntry();
+    if (appMode === 'zh') return e.en.replace(/[=＝]/g, '，');
+    if (state.broadcast === 'zh' && e.zh) return e.zh;
+    return e.en.replace(/[=＝]/g, ', ');
+  }
+
+  function broadcastLang() {
+    if (appMode === 'zh') return 'zh';
+    var e = currentEntry();
+    return state.broadcast === 'zh' && e.zh ? 'zh' : 'en';
+  }
+
+  // 语文「词语＋提示语」模式：提示语文本（无提示语词条返回 ''）
+  function currentHintText() {
+    if (appMode !== 'zh' || state.broadcast !== 'zh_hint') return '';
+    return currentEntry().zh || '';
+  }
+
+  // 播一遍当前词条；语文提示语模式同一遍内先播词语、再播提示语
+  function speakWordThenHint(done) {
+    var hint = currentHintText();
+    speak(broadcastText(), broadcastLang(), function () {
+      if (!state.playing) return;
+      if (state.paused) return; // resumeFn 已登记，恢复时按当前阶段继续
+      if (hint) speak(hint, 'zh', done);
+      else done();
+    });
+  }
+
+  function renderProgress() {
+    var total = state.playOrder.length;
+    $('progressBar').style.width = (total ? (state.idx / total) * 100 : 0) + '%';
+    $('progressText').textContent = '第 ' + Math.min(state.idx + 1, total) + ' / ' + total + ' 条';
+    // 屏幕上显示的是要默写的答案（默认隐藏，按住查看）
+    var answer = currentEntry().en;
+    var wd2 = $('wordDisplay');
+    wd2.textContent = answer;
+    // 长词组 / 句子自动缩小字号（汉字更宽，语文模式阈值更低）
+    var isZh = appMode === 'zh';
+    wd2.style.fontSize = answer.length > (isZh ? 24 : 30) ? '22px' : answer.length > (isZh ? 12 : 16) ? '30px' : '42px';
+    hideWord();
+  }
+
+  function clearTimer() {
+    if (state.timer) { clearTimeout(state.timer); state.timer = null; }
+  }
+
+  // 播当前条目（含重复遍数），播完后等待间隔再进入下一个
+  // state.resumeFn 记录「此刻暂停、稍后按继续时该做什么」，分三种情况：
+  //   1) 说话中途被打断 → 从已播完的遍数继续（重读被打断的这一遍）
+  //   2) 两遍之间的间隔中 → 继续播剩下的遍数
+  //   3) 两词之间的间隔中 → 直接进入下一个词（绝不重读刚播完的词）
+  function playCurrent() {
+    if (!state.playing || state.paused) return;
+    renderProgress();
+    var times = state.spokenTimes; // 从已播遍数继续，而非从 0 开始
+    function afterSpoken() {
+      if (!state.playing) return;
+      if (state.paused) { state.resumeFn = playCurrent; return; }
+      state.spokenTimes = times; // 记录已播完的遍数
+      if (times < state.repeat) {
+        state.resumeFn = playCurrent; // 2) 遍间间隔：继续剩余的遍数
+        startWait(state.repeatGap * 1000, speakOnce); // 遍与遍之间的间隔
+      } else {
+        state.spokenTimes = 0; // 本词已全部播完
+        state.resumeFn = nextWord; // 3) 词间间隔：恢复后进入下一个，不重读
+        startWait(state.interval * 1000, nextWord);
+      }
+    }
+    function speakOnce() {
+      if (!state.playing) return;
+      if (state.paused) { state.resumeFn = playCurrent; return; }
+      times++;
+      state.resumeFn = playCurrent; // 1) 中途打断：恢复后从已完成遍数继续
+      speakWordThenHint(afterSpoken);
+    }
+    speakOnce();
+  }
+
+  function nextWord() {
+    clearTimer();
+    if (!state.playing) return;
+    if (state.idx < state.playOrder.length - 1) {
+      state.idx++;
+      playCurrent();
+    } else {
+      finish();
+    }
+  }
+
+  // 完成页：按本次实际播放顺序列出所有内容，方便对照批改（随机播放时尤其有用）
+  function renderDoneList() {
+    var list = $('reviewList');
+    if (!list) return;
+    list.innerHTML = '';
+    var order = (state.playOrder && state.playOrder.length)
+      ? state.playOrder
+      : state.entries.map(function (_, i) { return i; });
+    var shown = 0;
+    order.forEach(function (ei) {
+      var e = state.entries[ei];
+      if (!e) return;
+      var li = document.createElement('li');
+      li.className = 'review-item';
+
+      var en = document.createElement('span');
+      en.className = 'review-en';
+      en.textContent = e.en;
+      li.appendChild(en);
+
+      if (e.zh) {
+        var zh = document.createElement('span');
+        zh.className = 'review-zh';
+        zh.textContent = e.zh;
+        li.appendChild(zh);
+      }
+      list.appendChild(li);
+      shown++;
+    });
+    var note = '共 ' + shown + ' 条';
+    if (state.order === 'random') note += ' · 随机顺序';
+    if (appMode === 'en' && state.broadcast === 'zh') note += ' · 报中文写英文';
+    if (appMode === 'zh' && state.broadcast === 'zh_hint') note += ' · 含提示语';
+    $('reviewCount').textContent = note;
+  }
+
+  function finish() {
+    state.playing = false;
+    state.resumeFn = null;
+    stopSpeech();
+    $('progressBar').style.width = '100%';
+    $('doneSub').textContent = '本次共默写 ' + state.entries.length + ' 条内容，棒棒的！';
+    renderDoneList();
+    show('done');
+    speak(cfg().doneSpeech, cfg().doneSpeechLang, null);
+  }
+
+  // ---------------- 开场播报 ----------------
+  // 点开始后：先播报标题（中文）"三年级上册Unit3--词组默写，现在开始"，
+  // 停顿一拍再进入第一个词，给孩子准备时间
+  var INTRO_DELAY = 1200; // 标题播完后的停顿（毫秒）
+
+  function buildIntroText() {
+    var label = currentListName ? currentListName : cfg().introDefault;
+    return label + '默写，现在开始';
+  }
+
+  function playIntro(thenStart) {
+    if (!state.playing) return;
+    // 标题始终用中文播报（无论默写模式是报英文还是报中文）；
+    // 没有中文语音引擎时不硬播，改为静默等待给孩子准备时间
+    var restartIntro = function () { playIntro(thenStart); };
+    if (!synth || !zhVoice) {
+      state.resumeFn = thenStart; // 静默等待期间暂停：恢复后直接开始
+      startWait(1800, thenStart);
+      return;
+    }
+    state.resumeFn = restartIntro;
+    speak(buildIntroText(), 'zh', function () {
+      if (!state.playing) return;
+      if (state.paused) { state.resumeFn = restartIntro; return; }
+      state.resumeFn = thenStart;
+      startWait(INTRO_DELAY, thenStart);
+    });
+  }
+
+  $('startBtn').addEventListener('click', function () {
+    var entries = parseEntries($('wordInput').value);
+    if (!entries.length) { alert(cfg().startEmptyHint); return; }
+    if (appMode === 'zh') {
+      // 语文模式必须用中文引擎；提示语缺失的词条降级为只报词语
+      if (!zhVoice) {
+        if (!confirm('未检测到你设备上的中文语音引擎，将尝试用默认语音播报（可能发音不准）。\n仍要继续吗？')) return;
+      }
+      if (state.broadcast === 'zh_hint') {
+        var noHint = entries.filter(function (e) { return !e.zh; }).length;
+        if (noHint > 0) {
+          if (!confirm('有 ' + noHint + ' 个词语没有提示语，这些将只播报词语本身。\n仍要继续吗？')) return;
+        }
+      }
+    } else if (state.broadcast === 'zh') {
+      var missing = entries.filter(function (e) { return !e.zh; }).length;
+      if (missing > 0) {
+        alert('播报中文需要每个单词都带中文释义，\n当前有 ' + missing + ' 个单词缺少释义。\n\n请按「apple 苹果」的格式补充，或改为播报英文。');
+        return;
+      }
+      if (!zhVoice) {
+        if (!confirm('未检测到你设备上的中文语音引擎，将尝试用默认语音播报（可能发音不准）。\n仍要继续吗？')) return;
+      }
+    }
+    state.entries = entries;
+    state.playOrder = entries.map(function (_, i) { return i; });
+    if (state.order === 'random') shuffle(state.playOrder);
+    state.idx = 0;
+    state.paused = false;
+    state.playing = true;
+    state.spokenTimes = 0;
+    state.resumeFn = null;
+    stopSpeech(); // 作废上一场可能残留的播报
+    setPauseUI();
+    show('play');
+    showReadyScreen();
+    playIntro(playCurrent);
+  });
+
+  // 开场播报期间屏幕显示"准备开始"，不暴露第一个答案
+  function showReadyScreen() {
+    var wd2 = $('wordDisplay');
+    wd2.textContent = '准备开始…';
+    wd2.style.fontSize = '30px';
+    wd2.classList.remove('word-hidden');
+    $('progressText').textContent = '第 1 / ' + state.playOrder.length + ' 条';
+    $('progressBar').style.width = '0%';
+  }
+
+  // 暂停 / 继续
+  function setPauseUI() {
+    $('pauseBtn').innerHTML = state.paused
+      ? '<span class="ico">▶</span>继续'
+      : '<span class="ico">⏸</span>暂停';
+  }
+  // 暂停 / 继续：暂停时「冻结」现场，恢复时从冻结处接着走
+  //   · 正在发声  → 原生 pause()，音频停在原处，恢复后接着念（不重播）
+  //   · 等待间隔中 → 记住剩余时长，恢复后接着倒数（不从头计时）
+  //   · 还没发声  → 作废本条，恢复时按当前阶段重来
+  $('pauseBtn').addEventListener('click', function () {
+    if (!state.playing) return;
+
+    if (!state.paused) {
+      // ===== 暂停 =====
+      state.paused = true;
+      setPauseUI();
+      state.pauseKind = null;
+
+      var sp = currentSpeech;
+      if (sp && sp.active() && (sp.started() || sp.isSpeaking()) && !sp.isPaused()) {
+        sp.pause();
+        if (sp.isPaused()) {
+          state.pauseKind = 'speech'; // 原生暂停成功
+        } else {
+          // 该浏览器不支持 pause()：退化为作废本条，恢复时重念当前这一遍
+          stopSpeech();
+          state.pauseKind = 'idle';
+        }
+      } else if (freezeWait()) {
+        state.pauseKind = 'wait'; // 记下剩余等待时长
+      } else {
+        stopSpeech();
+        state.pauseKind = 'idle';
+      }
+      $('speakingBadge').classList.remove('on');
+      return;
+    }
+
+    // ===== 继续 =====
+    state.paused = false;
+    setPauseUI();
+    var kind = state.pauseKind;
+    state.pauseKind = null;
+
+    if (kind === 'speech' && currentSpeech && currentSpeech.active()) {
+      var sp2 = currentSpeech;
+      sp2.resume();
+      // 兜底：个别浏览器 pause() 生效但 resume() 无效（或长暂停被系统丢弃）→ 重念当前这一遍
+      setTimeout(function () {
+        if (!state.playing || state.paused) return;
+        if (!sp2.active()) return;                 // 已正常播完
+        if (!sp2.isPaused() && sp2.isSpeaking()) return; // 正常接着播
+        stopSpeech();
+        playCurrent();
+      }, 1200);
+      return;
+    }
+
+    if (kind === 'wait' && state.waitFn) {
+      var remain = state.waitRemain || 0;
+      var f = state.waitFn;
+      state.waitRemain = 0;
+      state.waitFn = null;
+      if (remain > 0) { startWait(remain, f); } else { f(); }
+      return;
+    }
+
+    // 尚未发声 / 兜底：按当前阶段重新开始
+    var fn = state.resumeFn;
+    state.resumeFn = null;
+    if (fn) { fn(); } else { playCurrent(); }
+  });
+
+  $('nextBtn').addEventListener('click', function () {
+    if (!state.playing) return;
+    stopSpeech();
+    state.spokenTimes = 0;
+    state.resumeFn = null;
+    nextWord();
+  });
+
+  $('prevBtn').addEventListener('click', function () {
+    if (!state.playing) return;
+    stopSpeech();
+    state.spokenTimes = 0;
+    state.resumeFn = null;
+    state.idx = Math.max(0, state.idx - 1);
+    playCurrent();
+  });
+
+  $('repeatBtn').addEventListener('click', function () {
+    if (!state.playing) return;
+    stopSpeech();
+    state.resumeFn = null;
+    speakWordThenHint(function () {
+      if (!state.playing || state.paused) return;
+      state.resumeFn = nextWord;
+      startWait(state.interval * 1000, nextWord);
+    });
+  });
+
+  // 按住看单词
+  var wd = $('wordDisplay');
+  function hideWord() { wd.classList.add('word-hidden'); }
+  function revealWord() { wd.classList.remove('word-hidden'); }
+  ['mousedown', 'touchstart'].forEach(function (ev) {
+    $('peekBtn').addEventListener(ev, function (e) { e.preventDefault(); revealWord(); });
+  });
+  ['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach(function (ev) {
+    $('peekBtn').addEventListener(ev, hideWord);
+  });
+
+  $('quitBtn').addEventListener('click', function () {
+    if (!confirm('确定结束本次默写吗？')) return;
+    state.playing = false;
+    stopSpeech();
+    show('setup');
+  });
+
+  $('againBtn').addEventListener('click', function () {
+    state.playOrder = state.entries.map(function (_, i) { return i; });
+    if (state.order === 'random') shuffle(state.playOrder);
+    state.idx = 0;
+    state.paused = false;
+    state.playing = true;
+    state.spokenTimes = 0;
+    state.resumeFn = null;
+    stopSpeech(); // 打断"Great job"等上一场余音
+    setPauseUI();
+    show('play');
+    showReadyScreen();
+    playIntro(playCurrent);
+  });
+
+  $('homeBtn').addEventListener('click', function () {
+    state.playing = false;
+    stopSpeech();
+    show('setup');
+  });
+
+  // ---------------- 模式切换：两套数据 / 设置完全隔离 ----------------
+  // 切换时先把当前模式的输入与设置存回它的存储键，再载入目标模式的上次现场
+  function saveModeSettings() {
+    try {
+      localStorage.setItem(cfg().settingsKey, JSON.stringify({
+        order: state.order, repeat: state.repeat, repeatGap: state.repeatGap,
+        interval: state.interval, rate: state.rate,
+        broadcast: state.broadcast,
+        lastWords: $('wordInput').value
+      }));
+    } catch (e) {}
+  }
+
+  function loadModeSettings() {
+    var c = cfg();
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(c.settingsKey)); } catch (e) {}
+    state.order = (saved && saved.order) || 'seq';
+    state.repeat = (saved && saved.repeat) || 1;
+    state.repeatGap = (saved && saved.repeatGap) || 2;
+    state.interval = (saved && saved.interval) || 5;
+    state.rate = clampRate((saved && saved.rate) || 0.8);
+    state.broadcast = (saved && saved.broadcast) || c.defaultBroadcast;
+    $('wordInput').value = (saved && saved.lastWords) ? saved.lastWords : '';
+    state.contentType = ''; // 交给 refreshCount 重新识别
+    applySettings(snapshotSettings());
+  }
+
+  // 按模式刷新所有界面文案与控件
+  function applyModeUI() {
+    var c = cfg();
+    document.title = c.title;
+    $('appTitle').textContent = c.icon + ' ' + c.title;
+    $('appSub').textContent = c.sub;
+    $('inputCardTitle').textContent = c.cardTitle;
+    $('inputHintText').textContent = c.inputHint;
+    $('wordInput').placeholder = c.placeholder;
+    $('listNameInput').placeholder = c.listNamePh;
+    $('peekBtn').textContent = c.peekLabel;
+    $('broadcastSeg').innerHTML = c.broadcastSegHTML;
+    $('broadcastHint').textContent = c.broadcastHint;
+    document.querySelectorAll('#modeSwitch button').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.mode === appMode);
+    });
+    updateVoiceWarn();
+    currentListName = '';
+    listState.group = '';
+    listState.search = '';
+    loadModeSettings();
+    renderLists();
+    refreshCount();
+  }
+
+  function setMode(m) {
+    if (m === appMode) return;
+    if (state.playing && !confirm('正在默写中，切换模式会结束本次默写，继续吗？')) return;
+    saveModeSettings();
+    stopSpeech();
+    state.playing = false;
+    state.paused = false;
+    state.spokenTimes = 0;
+    state.resumeFn = null;
+    appMode = m;
+    try { localStorage.setItem('dictation_mode_v1', m); } catch (e) {}
+    applyModeUI();
+    show('setup');
+  }
+
+  document.querySelectorAll('#modeSwitch button').forEach(function (b) {
+    b.addEventListener('click', function () { setMode(b.dataset.mode); });
+  });
+
+  // 启动：恢复上次使用的模式及其现场（无记录则默认英语模式）
+  try {
+    var savedMode = localStorage.getItem('dictation_mode_v1');
+    if (savedMode === 'en' || savedMode === 'zh') appMode = savedMode;
+  } catch (e) {}
+  applyModeUI();
+  window.addEventListener('beforeunload', saveModeSettings);
+})();
+</script>
+</body>
+</html>

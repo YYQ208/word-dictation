@@ -1,0 +1,16 @@
+# ---- 系统 / 编辑器 ----
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+
+# ---- WorkBuddy 会话记忆（只留本机，不用同步）----
+.workbuddy/memory/
+
+# ---- 依赖与构建产物（当前项目没有，留给以后）----
+node_modules/
+dist/
+
+# ---- 重要：下面两类文件必须提交，不能忽略 ----
+# .workbuddy/applications.yaml 和 .wbapp_xxxx.genie 记录着发布绑定，
+# 它们跟项目走，分享链接才不会变。若被忽略，换台电脑就会重新生成一个新链接。
