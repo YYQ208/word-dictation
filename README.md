@@ -245,6 +245,7 @@ What is your name? 你叫什么名字？
 - 语文输入提示补充顿号 / 逗号分隔的说明与示例（功能原本就支持）。
 - 删除重复执行的列表渲染和一条无效 CSS 声明。
 - 恢复双指缩放的可用性。
+- 文档：补充「换电脑 / 多设备协作」的完整步骤（安装 Git、署名、代理、冲突处理）。
 
 ### 初始版本
 
@@ -267,6 +268,57 @@ git push
 ```
 
 推送到 `main` 后约 1 分钟，GitHub Pages 会自动重新构建，线上地址随即更新，无需手动操作。
+
+### 换电脑 / 多设备协作
+
+源码就在仓库里，任何一台电脑 `clone` 下来都能继续改，**不需要拷贝文件或用 U 盘**。
+
+**新电脑首次配置（只做一次）**
+
+```bash
+# 1. 安装 Git（Windows 可用 winget，或到 git-scm.com 下载安装包）
+winget install --id Git.Git -e
+
+# 2. 配置提交署名（换成自己的 GitHub 用户名与 noreply 邮箱）
+git config --global user.name "YYQ208"
+git config --global user.email "25290332+YYQ208@users.noreply.github.com"
+git config --global credential.helper manager
+
+# 3. 克隆仓库
+git clone https://github.com/YYQ208/word-dictation.git
+cd word-dictation
+```
+
+完成后直接双击 `index.html` 就能改、能预览，没有编译步骤。
+
+**日常使用**
+
+```bash
+git pull                 # ① 开工前先拉最新版
+# ② 改文件，浏览器刷新验证
+git add -A
+git commit -m "改了什么"
+git push                 # ③ 推上去，约 1 分钟后线上自动更新
+```
+
+**网络**
+
+GitHub 在国内不一定能直连。若 `clone` / `push` 卡住，或报 `schannel: failed to receive handshake`、`Connection reset`，给这个仓库单独配代理：
+
+```bash
+git config http.proxy http://127.0.0.1:7897     # 端口按本机代理实际端口修改
+git config https.proxy http://127.0.0.1:7897
+```
+
+代理是**仓库级**配置：只对当前目录生效，不影响其他项目，也不会随仓库同步到别的电脑——每台机器各配一次即可。首次 `push` 会弹出 GitHub 授权窗口，点一次确认后由凭据管理器记住，以后不再询问。
+
+**避免冲突**
+
+`index.html` 是单文件，两台电脑同时改会在 `push` 时报冲突。三条规则就够：
+
+1. 离开一台电脑前先 `push`，到另一台先 `pull`；
+2. 同一时间只在一台电脑上改；
+3. 万一冲突：`git pull` 会提示冲突文件，交给编辑器或 AI 合并；确认本地改动可以丢弃时，用 `git checkout --theirs index.html` 直接采用远端版本。
 
 **约定**
 
