@@ -14,3 +14,4 @@ dist/
 # ---- 重要：下面两类文件必须提交，不能忽略 ----
 # .workbuddy/applications.yaml 和 .wbapp_xxxx.genie 记录着发布绑定，
 # 它们跟项目走，分享链接才不会变。若被忽略，换台电脑就会重新生成一个新链接。
+index.html.bak-20261106
